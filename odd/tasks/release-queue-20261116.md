@@ -9,6 +9,8 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - S3: "aquí no hay coordinación, si está en tu agents quitalo y la skill no la uses"
 - S4: "sigue hasta que acabes" / "no pares"
 
+- S5: "Never build/install to or modify the production runtime" (existing repository safety constraint; workflow isolation is a prerequisite of the #1918 experiment).
+
 ## Tasks
 
 - T1: #1999 installer — S1-S4, delegated independent parallel writer, merged PR #2006 (f35360fe +19a9378e; merge b1f39f42), CI green and issue closed; 108 tests + realpnpm10/12 install/update PASS; Risk item5.
@@ -19,6 +21,8 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T6: #1993 existing implementation and failed release — S1-S4, merged PR #2007 with scoped owner-authorized size exception; preserved original commits, exact-head CIgreen; merge c880e557, issue closed.
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
 - T8: Refresh queue and publish one final release — S1-S4, pending #1918 causal investigation and canonical release gates; no tag or release created.
+
+- T9: Isolate manual/release test-runtime installation — S1/S5, inline, in progress; existing exclude filter and private marker, no new CLI options; Risk item5; narrow workflow/test/doc surface.
 
 ## Log
 
@@ -53,3 +57,5 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 
 - L24: Controlledcontrast at18:19-18:22UTC created exactlythree furtherownedinstances: seed14360 createdprivateempty.accdb(format12), canonicalnoDB37792 held10.080s, canonicalprivateblankDB32888 held120.768s. AllbeganwithzeroAccess, SecurityLowfalse, gracefulclose, noforcedkills, noownedprocesssurvived, and exactPID+creation event1000 queriesfound0crashes. ScratchTEMP/tmp.0mhRxXeE9V retains traces/privateblankfixture. Scratchobserverexit-race corrected without re-creatingseed. These boundednonrepros do not resolve #1918.
 - L25: Do not interpret canonical OwnedPidKilled=true as proof of termination: current helper sets it on observed naturalexit too; suppression killstubs were never invoked in theseprobes. Historicalrelease42059432207 metadata returnedno retainedartifacts. Read-only safety audit of manualworkflow installer isolation pending before any runner dispatch; no remotejob started.
+
+- L26: Freshsource audit confirms both Access workflows run install with only runtime-dir/no-tui; this still discovers global skill/pointertargets and writes the machine marker. Existing --exclude opencode,claude,codex,cursor,pi plus DYSFLOW_RUNTIME_MARKER_PATH suffice, including explicit external Pi agentdirs. Preparing bounded safety correction locally before remoteexecution; no unsafeinstall orworkflowdispatch performed. Public newissue publication remains subject to required form confirmations; no new tracker created yet.
