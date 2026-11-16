@@ -24,7 +24,7 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
 - T8: Refresh queue and publish one final release — S1-S4, pending isolation PR and canonical release gates; #1918 stays open/non-blocking perS6; no tag or release created.
 
-- T9: Isolate manual/release test-runtime installation — S1/S5, inline, locally verified commit70b7da44;284tests + independent containment/restore probes PASS; owner waived a separate issue; PR related to1918 in progress; Risk item5.
+- T9: Isolate manual/release test-runtime installation — S1/S5, inline, locally verified commit70b7da44;284tests + independent containment/restore probes PASS; owner waived a separate issue; BLOCKED: current GitHub App lacks workflows permission, firstpush authoritatively rejected; no remote branch/PR; Risk item5.
 
 ## Log
 
@@ -68,3 +68,5 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - L30: #1993postmerge mainCI atc880e557passed. Onlypublishedopenissue remains1918; releaseunchangedv4.5.7. Standalone4ownedAccessinstancesallcompletedwithoutcrash orsurvivors, notcausalresolution. Nextneededproof ismanualrunner workload aftersafeisolationfix; no remoteexecution permission inferred from earlier sizeexception. No manualjobdispatched.
 
 - L31 (owner): "Lo autorizo" to the complete S6 proposal. Separate newissue publication was explicitly waived, so its private draft remains unsubmitted and its checkbox confirmations are not inferred. Keep1918open, do not claimCOMcausefixed, integrate70b7da44 then use currentGitHubsession forrelease onlyafterallrequiredCI/tagE2Egatesgreen. Manualdiagnosticworkflow is not a release prerequisite under this updatedscope.
+
+- L32: First normal push of fix/e2e-runtime-isolation was authoritatively rejected: GitHub App cannot create/update .github/workflows/access-e2e-manual.yml without workflows permission. No retry, API workaround, credential discovery/switch, or unsafe release attempted. Read-only ls-remote and PRlookup confirm no remote branch and no PR. Verified localhead70b7da44e9e2da456974a248896f532adf361dfc remains clean. Owner must publish this exact branch/commit using a session legitimately authorized for workflows, or enable that permission on the existing connection; current session cannot complete publication. After that externalstatechange, resume already-authorized PR+CI+release without another generalapproval.
