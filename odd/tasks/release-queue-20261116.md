@@ -4,12 +4,14 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 
 ## Specs
 
-- S1: "Atacalas todas poco a poco y al final cuando no quede nada pendiente sacamos release"
+- S1: Original request: "Atacalas todas poco a poco y al final cuando no quede nada pendiente sacamos release". The current explicit S6 exception supersedes the zero-open-issues condition.
 - S2: "recuerda de ejecutar tus sh dentro de tu entorno que salta en mi sistema"
 - S3: "aquí no hay coordinación, si está en tu agents quitalo y la skill no la uses"
 - S4: "sigue hasta que acabes" / "no pares"
 
 - S5: "Never build/install to or modify the production runtime" (existing repository safety constraint; workflow isolation is a prerequisite of the #1918 experiment).
+
+- S6: Owner: "Lo autorizo" to: "Propongo integrar el aislamiento ya verificado sin abrir otra incidencia, dejar #1918 abierta como investigación no bloqueante y publicar en DysTelefonica/dysflow con la sesión actual de GitHub, únicamente con CI y E2E del tag verdes."
 
 ## Tasks
 
@@ -20,9 +22,9 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - T5: #1918 startup-crash investigation — S1-S4, quiet window now available; rawCOM no-DB plus canonical no-DB/privateblankDB probes completed without crashes; causal evidence still required.
 - T6: #1993 existing implementation and failed release — S1-S4, merged PR #2007 with scoped owner-authorized size exception; preserved original commits, exact-head CIgreen; merge c880e557, issue closed.
 - T7: Eight dependency PRs — S1-S4, all eight merged, including #1986 e268e4da after RED/4 GREEN/lint/independent check; remote refs preserved.
-- T8: Refresh queue and publish one final release — S1-S4, pending #1918 causal investigation and canonical release gates; no tag or release created.
+- T8: Refresh queue and publish one final release — S1-S4, pending isolation PR and canonical release gates; #1918 stays open/non-blocking perS6; no tag or release created.
 
-- T9: Isolate manual/release test-runtime installation — S1/S5, inline, locally verified commit70b7da44;284tests + independent containment/restore probes PASS; newissue human form confirmations and manual-run consent pending; Risk item5.
+- T9: Isolate manual/release test-runtime installation — S1/S5, inline, locally verified commit70b7da44;284tests + independent containment/restore probes PASS; owner waived a separate issue; PR related to1918 in progress; Risk item5.
 
 ## Log
 
@@ -64,3 +66,5 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - L28: Independentfresharchive verifier70b7da44 re-ran21files284testsPASS, reproducedbaseline4/44failures, and executed exact READMEtry/finally restoration4/4(previousmarkerdefined/unset,installersuccess/throw). NoAccess/jobs/production writes; actualmachine marker hashunchanged. VerifierTEMP/tmp.1RGV5vyFq8 retains baseline/candidate dependencyjunctions to activeisolationcheckout:neverrecursivefollow.
 - L29: Completedopen+closedduplicate search for test-runtime(54results), reviewed related1771/475/574infull; no equivalentworkflowinstallcontainmenttracker. Prepared privacy-scanned bug_report.yml-conforming draft in TEMP/dysflow-workflow-issue-2075e0c56c8845e39d839a598bdaaec2/issue-body.md, hash1C5956FE14EF213151E68EE749EFAFF3CBEDB1B38F2CA573630287CD75D43C98. Two required first-person pre-submissioncheckboxes leftUNSET pendingexplicit humanaffirmation; noissueorPRcreated, no sourcepush.
 - L30: #1993postmerge mainCI atc880e557passed. Onlypublishedopenissue remains1918; releaseunchangedv4.5.7. Standalone4ownedAccessinstancesallcompletedwithoutcrash orsurvivors, notcausalresolution. Nextneededproof ismanualrunner workload aftersafeisolationfix; no remoteexecution permission inferred from earlier sizeexception. No manualjobdispatched.
+
+- L31 (owner): "Lo autorizo" to the complete S6 proposal. Separate newissue publication was explicitly waived, so its private draft remains unsubmitted and its checkbox confirmations are not inferred. Keep1918open, do not claimCOMcausefixed, integrate70b7da44 then use currentGitHubsession forrelease onlyafterallrequiredCI/tagE2Egatesgreen. Manualdiagnosticworkflow is not a release prerequisite under this updatedscope.
