@@ -226,11 +226,14 @@ jobs:
 
       - name: Install throwaway test runtime (Windows)
         shell: pwsh
+        env:
+          DYSFLOW_RUNTIME_MARKER_PATH: ${{ runner.temp }}/dysflow-e2e-runtime.marker
         # Per E2E_testing/README.md pre-release procedure:
-        # `node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui`.
+        # Exclude agent profiles and use a private marker: runtime-dir alone
+        # does not contain skill/pointer installation or runtime registration.
         # `dist/cli/index.js` is the canonical CLI; `MCP_E2E_REFUSES_PRODUCTION_RUNTIME`
         # keeps the harness off %LOCALAPPDATA%\dysflow.
-        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui
+        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui --exclude opencode,claude,codex,cursor,pi
 
       - name: Run full E2E battery
         shell: pwsh

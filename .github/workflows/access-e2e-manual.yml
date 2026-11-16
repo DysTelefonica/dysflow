@@ -91,9 +91,11 @@ jobs:
 
       - name: Install throwaway test runtime (Windows)
         shell: pwsh
+        env:
+          DYSFLOW_RUNTIME_MARKER_PATH: ${{ runner.temp }}/dysflow-e2e-runtime.marker
         # MCP_E2E_REFUSES_PRODUCTION_RUNTIME keeps the harness off
         # %LOCALAPPDATA%\dysflow; the battery uses this repository-local runtime.
-        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui
+        run: node dist/cli/index.js install --runtime-dir .\\test-runtime --no-tui --exclude opencode,claude,codex,cursor,pi
 
       - name: Mark the start of the battery (#1918)
         shell: pwsh
