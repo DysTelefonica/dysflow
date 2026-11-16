@@ -24,6 +24,14 @@ describe("HTTP API documentation", () => {
     expect(doc).toContain("--enable-writes");
   });
 
+  it("documents that detach is MCP-only and the detached-run conflict status (#1993)", () => {
+    const doc = readFileSync(docPath, "utf8");
+
+    expect(doc).toContain("| `detach` (detached runs are MCP-only) | `400 HTTP_INVALID_INPUT` |");
+    expect(doc).toContain("`409 TEST_RUN_ALREADY_ACTIVE`");
+    expect(doc).toContain("test/adapters/http/http-test-vba-detach-1993.test.ts");
+  });
+
   it("documents env-first HTTP token authentication (#592)", () => {
     const doc = readFileSync(docPath, "utf8");
 

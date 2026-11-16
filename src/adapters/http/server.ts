@@ -7,6 +7,7 @@ import {
   failureResult,
   type OperationResult,
   successResult,
+  TEST_RUN_ALREADY_ACTIVE,
   type VbaSyncPort,
 } from "../../core/contracts/index.js";
 import {
@@ -416,7 +417,11 @@ async function routeRequest(
         ? 400
         : !result.ok && result.error.code === "PROCEDURE_NOT_ALLOWED"
           ? 403
-          : undefined;
+          : // #1993 — a detached run (MCP-only) holds this database: a conflict,
+            // not a server fault.
+            !result.ok && result.error.code === TEST_RUN_ALREADY_ACTIVE
+            ? 409
+            : undefined;
     send(result, status);
     return;
   }

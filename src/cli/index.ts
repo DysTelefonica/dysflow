@@ -12,6 +12,7 @@ import { handleMigrateDryRunCommand } from "./commands/migrate-dryrun.js";
 import { handleServeCommand } from "./commands/serve.js";
 import { handleSetupCommand } from "./commands/setup.js";
 import { handleTelemetryEvidenceCommand } from "./commands/telemetry-evidence.js";
+import { handleTestRunCommand } from "./commands/test-run.js";
 import { handleTuiCommand } from "./commands/tui.js";
 import {
   type CliCommandContext,
@@ -38,6 +39,8 @@ const COMMANDS = new Map<string, CommandHandler>([
   ["codegraph-drift", handleCodegraphDriftCommand],
   ["migrate-dryrun", handleMigrateDryRunCommand],
   ["telemetry-evidence", handleTelemetryEvidenceCommand],
+  // Issue #1993 — internal runner of a detached test_vba run; not in HELP_TEXT.
+  ["test-run", handleTestRunCommand],
 ]);
 
 /**

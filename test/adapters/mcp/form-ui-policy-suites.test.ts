@@ -538,7 +538,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     // migration tool — default `{}` is a pure read-class diff preview,
     // apply:true rewrites `.dysflow/project.json` atomically and is
     // write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92;
-    // #1321 worktree cache controls: 92 -> 94.
+    // #1321 worktree cache controls: 92 -> 94; #1993 get_test_run: 94 -> 95.
     const tools = createDysflowMcpTools({
       services: makeServices(),
       writes: true,
@@ -546,7 +546,7 @@ describe("form mutation family exposed via createDysflowMcpTools (#813 phase 6)"
     const visible = tools.filter((tool) => !tool.hidden).length;
     expect(
       visible,
-      "visible tool count after #872 + #971 + #965 + #976 + #973 + #978 + #1057 + #1177",
-    ).toBe(94);
+      "visible tool count after #872 + #971 + #965 + #976 + #973 + #978 + #1057 + #1177 + #1993",
+    ).toBe(95);
   });
 });

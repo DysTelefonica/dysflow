@@ -126,10 +126,10 @@ describe("feat-759-no-compile — compile_vba tool is removed end-to-end", () =>
     // migration tool — default `{}` is a pure read-class diff preview,
     // `apply:true` rewrites `.dysflow/project.json` atomically and is
     // write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92;
-    // #1321 worktree cache controls: 92 -> 94.
+    // #1321 worktree cache controls: 92 -> 94; #1993 get_test_run: 94 -> 95.
     expect(advertisedToolCount()).toBe(advertisedToolCount() - 0);
     // Pin the post-removal count explicitly. Update this to the matching
     // value at the time of any future tool surface change.
-    expect(advertisedToolCount()).toBe(94);
+    expect(advertisedToolCount()).toBe(95);
   });
 });

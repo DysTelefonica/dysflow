@@ -77,8 +77,9 @@
  * and is write-gated through MCP_WRITES_DISABLED): 90 -> 91; #1312 setup_project: 91 -> 92;
  * #1321 worktree cache controls: 92 -> 94.
  * #1484 adds `bootstrap` as the minimal first-call read-only surface: 94 -> 95.
- * #1534 removes `vba_inline_execution` in v4: 95 -> 94. */
-export const EXPECTED_ADVERTISED_TOOL_COUNT = 94;
+ * #1534 removes `vba_inline_execution` in v4: 95 -> 94.
+ * #1993 adds `get_test_run` (read-only detached test_vba fetch): 94 -> 95. */
+export const EXPECTED_ADVERTISED_TOOL_COUNT = 95;
 
 /** @type {string} Human-readable label rendered in the e2e report's `expected` column. */
 export const EXPECTED_ADVERTISED_TOOL_COUNT_LABEL = `${EXPECTED_ADVERTISED_TOOL_COUNT} tools`;

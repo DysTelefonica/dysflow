@@ -281,6 +281,16 @@ const CONTRACTS = {
             .loose(),
         })
         .loose(),
+      // Issue #1993 D1 — a detached start; the result is read with get_test_run.
+      z
+        .object({
+          mode: z.literal("apply"),
+          detached: z.literal(true),
+          operationId: z.string(),
+          status: z.literal("running"),
+          testsPlanned: z.number().int().nonnegative(),
+        })
+        .loose(),
       z
         .object({
           mode: planApplyMode,

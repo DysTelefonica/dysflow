@@ -266,6 +266,25 @@ export const VALIDATE_MANIFEST_SCHEMA: JsonObjectSchema = {
   anyOf: [{ required: ["testsPath"] }, { required: ["path"] }, { required: ["manifest"] }],
 };
 
+// Issue #1993 D4 — read a detached test_vba run; `wait` is clamped to 50 s.
+export const GET_TEST_RUN_SCHEMA: JsonObjectSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["operationId"],
+  properties: {
+    ...PROJECT_IDENTITY_BLOCK,
+    operationId: {
+      type: "string",
+      description: "The operationId test_vba returned with detach:true.",
+    },
+    wait: {
+      type: "number",
+      description:
+        "Seconds to wait for the run to end, re-reading it once a second; capped at 50. Omit to read once.",
+    },
+  },
+};
+
 export const LINT_MODULE_SCHEMA: JsonObjectSchema = {
   type: "object",
   required: ["module"],

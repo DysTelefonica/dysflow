@@ -143,22 +143,32 @@ export function resolveToolSurface(
   return override ?? config?.mcp?.toolSurface ?? "core";
 }
 
-export async function startMcpStdioAdapter(
+export type StdioServerOptions = NonNullable<Parameters<typeof startWithSdkServer>[2]>;
+
+/**
+ * The tools and server options of the stdio MCP server, built from the
+ * startup config exactly as `startMcpStdioAdapter` serves them. Issue #1993 —
+ * the detached test runner calls `test_vba` through this same tool set, so its
+ * stored result equals the synchronous one.
+ */
+export async function createStdioToolRuntime(
   config?: DysflowConfig,
   options?: { writesEnabled?: boolean; toolSurfaceOverride?: ToolSurface },
-): Promise<void> {
+): Promise<{ tools: DysflowMcpTool[]; serverOptions: StdioServerOptions }> {
   const configResult =
     config === undefined ? await loadDysflowConfigAsync() : { ok: true as const, data: config };
   // Issue #1867 — the project resolve_project fixes for this session. The tool
   // surface sets it; every per-input resolver reads it as the fallback cwd.
   const sessionProjectRoot = createSessionProjectRoot();
   const sessionOptions = { sessionCwd: sessionProjectRoot.get };
+  const writesEnabled = options?.writesEnabled ?? true;
   const services = createDynamicServices(
     configResult.ok ? configResult.data : undefined,
     configResult.ok ? undefined : configResult.error,
-    sessionOptions,
+    // Issue #1993 — a detached test_vba records this switch, so its runner
+    // serves the replay with the same one instead of forcing writes on.
+    { ...sessionOptions, sessionWritesEnabled: writesEnabled },
   );
-  const writesEnabled = options?.writesEnabled ?? true;
   const startupConfig = configResult.ok ? configResult.data : undefined;
   // Issue #1492 — resolve the effective tool surface.
   // Precedence: CLI override > project config > default "core".
@@ -230,7 +240,7 @@ export async function startMcpStdioAdapter(
 
   // New SDK-based path: wire SizeLimitTransform → StdioServerTransport → McpServer.
   const fallbackTelemetryCwd = startupConfig?.projectRoot ?? process.cwd();
-  await startWithSdkServer(tools, undefined, {
+  const serverOptions: StdioServerOptions = {
     resultValidationPolicy: "enforce",
     toolSurface,
     // Issue #1459 — the advertisement stream follows the same enable flag as
@@ -261,7 +271,16 @@ export async function startMcpStdioAdapter(
         };
       },
     }),
-  });
+  };
+  return { tools, serverOptions };
+}
+
+export async function startMcpStdioAdapter(
+  config?: DysflowConfig,
+  options?: { writesEnabled?: boolean; toolSurfaceOverride?: ToolSurface },
+): Promise<void> {
+  const { tools, serverOptions } = await createStdioToolRuntime(config, options);
+  await startWithSdkServer(tools, undefined, serverOptions);
 }
 
 /**
@@ -703,7 +722,12 @@ function successAccessContext(config: DysflowConfig, cwd = process.cwd()) {
 // full SDK server.
 export function createConfiguredServices(
   config: DysflowConfig,
-  options: { cwd?: string; env?: Record<string, string | undefined> } = {},
+  options: {
+    cwd?: string;
+    env?: Record<string, string | undefined>;
+    /** Issue #1993 — the MCP session write switch a detached test run records for its runner. */
+    sessionWritesEnabled?: boolean;
+  } = {},
 ): DysflowMcpServices {
   const operationRegistry = createProjectAccessOperationRegistry({
     ...config,
@@ -797,6 +821,9 @@ export function createConfiguredServices(
       // (no `.codegraph/` index, CLI missing, parse error) is built into
       // the factory — never throws.
       codeGraphVbaInvoker: createDefaultCodeGraphVbaInvoker(),
+      ...(options.sessionWritesEnabled === undefined
+        ? {}
+        : { detachedTestRuns: { sessionWritesEnabled: options.sessionWritesEnabled } }),
     }),
   };
 }
@@ -806,6 +833,8 @@ export function createDynamicServices(
   startupError?: DysflowError,
   options: ResolveConfigOptions & {
     serviceFactory?: (config: DysflowConfig) => DysflowMcpServices;
+    /** Issue #1993 — forwarded to {@link createConfiguredServices}. */
+    sessionWritesEnabled?: boolean;
   } = {},
 ): DysflowMcpServices {
   const serviceCache = new Map<string, DysflowMcpServices>();
@@ -1055,10 +1084,12 @@ export function createDynamicServices(
       },
     },
     vbaSyncToolService: {
-      execute: async (toolName, input) => {
+      // Issue #1993 T5 — `options` carries test_vba's progress callback and
+      // cancel signal (#1990); dropping it here silenced both in production.
+      execute: async (toolName, input, executionOptions) => {
         const res = await resolveService(input);
         if (res.ok && res.services.vbaSyncToolService !== undefined) {
-          return res.services.vbaSyncToolService.execute(toolName, input);
+          return res.services.vbaSyncToolService.execute(toolName, input, executionOptions);
         }
         const fallbackService = createUnavailableVbaSyncToolService(
           res.ok
@@ -1066,7 +1097,7 @@ export function createDynamicServices(
             : res.error,
           options,
         );
-        return fallbackService.execute(toolName, input);
+        return fallbackService.execute(toolName, input, executionOptions);
       },
     },
   };
@@ -1185,11 +1216,11 @@ function createUnavailableVbaSyncToolService(
     env: options.env ?? process.env,
   });
   return {
-    execute: async (toolName, input) => {
+    execute: async (toolName, input, executionOptions) => {
       const params = isRecord(input) ? input : {};
       const isSafeImportDryRun =
         (toolName === "import_all" || toolName === "import_modules") && truthy(params.dryRun);
-      if (isSafeImportDryRun) return fallback.execute(toolName, input);
+      if (isSafeImportDryRun) return fallback.execute(toolName, input, executionOptions);
       return failureResult(error);
     },
   };

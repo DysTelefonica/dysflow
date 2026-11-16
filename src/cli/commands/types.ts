@@ -1,7 +1,10 @@
+import type { StdioServerOptions } from "../../adapters/mcp/stdio.js";
+import type { DysflowMcpTool } from "../../adapters/mcp/tools.js";
 import type { DysflowConfig } from "../../core/config/dysflow-config.js";
 import type { OperationResult } from "../../core/contracts/index.js";
 import type { AccessDiagnosticsResult } from "../../core/services/diagnostics-service.js";
 import type { AccessQueryService } from "../../core/services/query-service.js";
+import type { RunnerProcessProbe } from "../../core/test-runs/test-run-ports.js";
 import type { SupplementDriftDiagnostic } from "./codegraph-supplement-drift-check.js";
 import type { DoctorCategoryCheck } from "./doctor/checks/types.js";
 import type { PiPackageCommandRunner } from "./install/pi-package-manager.js";
@@ -58,6 +61,15 @@ export type CliCommandContext = {
   piPackageCommandRunner?: PiPackageCommandRunner;
   readTuiKey?: () => Promise<TuiKey>;
   writeTuiFrame?: (frame: string) => void;
+  /** Injectable seams of the hidden detached test runner (`dysflow test-run`, #1993). */
+  detachedTestRun?: DetachedTestRunCliSeams;
+};
+
+export type DetachedTestRunCliSeams = {
+  /** The MCP tool set `test_vba` is called through; defaults to the stdio server's. */
+  createToolRuntime?: () => Promise<{ tools: DysflowMcpTool[]; serverOptions: StdioServerOptions }>;
+  processProbe?: RunnerProcessProbe;
+  runnerPid?: number;
 };
 
 export const HELP_TEXT = [
