@@ -24,6 +24,11 @@ Building an agent integration? Read the
 The installed version is reported by `dysflow --version` and the MCP `serverInfo.version`.
 See the [CHANGELOG](./CHANGELOG.md) for the full release history.
 
+Semantic verification compares form/report layout in `.form.txt` / `.report.txt`
+and code-behind in the sibling `.cls`. Both current `CodeBehindForm` /
+`CodeBehindReport` and legacy bare `CodeBehind` section markers are recognized;
+real layout changes remain actionable, and strict comparison stays exact.
+
 **71 visible MCP tools by default · 94 callable · Windows / Node 26**
 
 All Access, VBA, schema, and form tools are first-class API. No compatibility tiers.
