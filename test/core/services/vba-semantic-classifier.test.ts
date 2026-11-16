@@ -1107,7 +1107,7 @@ describe("line-move — LCS conservative choice", () => {
     });
   });
 
-  it("keeps a large insertion or deletion conservative and actionable", () => {
+  it("counts a large insertion exactly while keeping it actionable", () => {
     const shared = Array.from({ length: 20_001 }, (_, index) => `value${index} = ${index}`);
     const result = classifyVbaPair({
       sourceText: [...shared, "AuditMutation"].join("\n"),
@@ -1117,11 +1117,49 @@ describe("line-move — LCS conservative choice", () => {
     });
 
     expect(result).toMatchObject({
-      classification: "bothChanged",
-      recommendation: "manual_merge",
+      classification: "sourceNewer",
+      recommendation: "import_to_binary",
+      srcUniqueFunctionalLines: 1,
+      binaryUniqueFunctionalLines: 0,
       actionable: true,
     });
-    expect(result.reason).toContain("conservatively actionable");
+    expect(result.reason).not.toContain("lcs-capped");
+  });
+
+  it.each([0, 1500, 3000])("counts one inserted form property at position %i (#2001)", (index) => {
+    const lines = Array.from({ length: 3000 }, (_, i) => `    Width${i} =${i + 100}`);
+    const changed = [...lines];
+    changed.splice(index, 0, "    AutoResize = NotDefault");
+    const result = classifyVbaPair({
+      sourceText: lines.join("\n"),
+      binaryText: changed.join("\n"),
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+    expect(result).toMatchObject({
+      classification: "binaryNewer",
+      recommendation: "export_to_src",
+      srcUniqueFunctionalLines: 0,
+      binaryUniqueFunctionalLines: 1,
+      actionable: true,
+    });
+    expect(result.reason).not.toContain("lcs-capped");
+  });
+
+  it("keeps a missing identity actionable with one accurate line in a large class (#2001)", () => {
+    const body = Array.from({ length: 3000 }, (_, i) => `value${i} = ${i}`).join("\n");
+    const result = classifyVbaPair({
+      sourceText: body,
+      binaryText: `Attribute VB_Name = "Example"\n${body}`,
+      fileType: "cls",
+      mode: "semantic",
+    });
+    expect(result).toMatchObject({
+      classification: "binaryNewer",
+      srcUniqueFunctionalLines: 0,
+      binaryUniqueFunctionalLines: 1,
+      actionable: true,
+    });
   });
 
   it("keeps strict mode exact for reordered modules over the budget", () => {
