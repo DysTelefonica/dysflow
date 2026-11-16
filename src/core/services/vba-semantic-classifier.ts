@@ -24,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-11-16.r9-legacy-codebehind";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-11-16.r10-ordered-diff-edges";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -1053,35 +1053,41 @@ function normalizeEventProcedureOrderWithinPropertyRuns(text: string): string {
 
 /**
  * Computes the LCS (Longest Common Subsequence) length for two line arrays.
- * Classic DP approach, O(n*m). Bounded by LCS_LINE_BUDGET.
+ * Trims proven ordered common edges before bounded O(n*m) DP on the middle.
  *
  * @returns { lcs: number, capped: boolean }
  */
 export function lcsLength(a: string[], b: string[]): { lcs: number; capped: boolean } {
-  if (
-    a.length > LCS_LINE_BUDGET ||
-    b.length > LCS_LINE_BUDGET ||
-    a.length * b.length > LCS_CELL_BUDGET
-  ) {
+  let start = 0;
+  while (start < a.length && start < b.length && a[start] === b[start]) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA--;
+    endB--;
+  }
+  const commonEdges = start + a.length - endA;
+  const n = endA - start;
+  const m = endB - start;
+  if (n === 0 || m === 0) return { lcs: commonEdges, capped: false };
+
+  if (n > LCS_LINE_BUDGET || m > LCS_LINE_BUDGET || n * m > LCS_CELL_BUDGET) {
     // Exact ordered equality is handled by classifyVbaPair before reaching this
     // path. For unequal large inputs, an unordered approximation could hide a
-    // behavior-changing statement reorder. Returning zero commonality is a
-    // bounded, conservative fallback: downstream classification stays
+    // behavior-changing statement reorder. Retain only the proven common edges
+    // in the bounded, conservative fallback: downstream classification stays
     // actionable/manual-merge instead of claiming an equivalence we cannot prove.
-    return { lcs: 0, capped: true };
+    return { lcs: commonEdges, capped: true };
   }
-
-  const n = a.length;
-  const m = b.length;
 
   // Use two-row optimization to reduce memory
   let prev = new Array<number>(m + 1).fill(0) as number[];
   let curr = new Array<number>(m + 1).fill(0) as number[];
 
   for (let i = 1; i <= n; i++) {
-    const aLine = a[i - 1] ?? "";
+    const aLine = a[start + i - 1] ?? "";
     for (let j = 1; j <= m; j++) {
-      const bLine = b[j - 1] ?? "";
+      const bLine = b[start + j - 1] ?? "";
       if (aLine === bLine) {
         curr[j] = (prev[j - 1] ?? 0) + 1;
       } else {
@@ -1093,7 +1099,7 @@ export function lcsLength(a: string[], b: string[]): { lcs: number; capped: bool
     curr.fill(0);
   }
 
-  return { lcs: prev[m] ?? 0, capped: false };
+  return { lcs: commonEdges + (prev[m] ?? 0), capped: false };
 }
 
 /**
