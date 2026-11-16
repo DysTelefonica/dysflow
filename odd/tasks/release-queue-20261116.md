@@ -12,8 +12,8 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 ## Tasks
 
 - T1: #1999 installer — S1-S4, delegated independent parallel writer, implemented; 106 tests green, real pnpm10/12 independent verification running; Risk item 5.
-- T2: #2000 Pi typed errors — S1-S4, delegated independent parallel writer, verified; aac2b74e + 12fa011c, PR #2004 CI pending; Risk item 2.
-- T3: #2001 large semantic diff counts — S1-S4, inline, verified; f6813b27, PR #2005 CI pending; preserve missing VB_Name actionability.
+- T2: #2000 Pi typed errors — S1-S4, delegated independent parallel writer, merged PR #2004 (aac2b74e + 12fa011c; merge83a85d33), CI green and issue closed; Risk item2.
+- T3: #2001 large semantic diff counts — S1-S4, inline, merged PR #2005 (f6813b27; mergefc8b4612), CI green and issue closed; missing VB_Name stays actionable.
 - T4: #2002 legacy CodeBehind — S1-S4, inline, merged PR #2003 (9ffa2d6e; merge e58c106f), issue closed.
 - T5: #1918 startup-crash investigation — S1-S4, blocked by unknown-owned headless Access at 14:15 UTC; no probe launched; causal evidence still required.
 - T6: #1993 existing implementation and failed release — S1-S4, inline reconciliation, pending.
@@ -34,3 +34,6 @@ Checks: focused Vitest, lint/types, required CI; heavy E2E exclusively in the fi
 - L9: Installer tests had pre-existing global-marker writes through explicit fake envs (including applyIntegrationSelection). Tests interrupted, fixture paths isolated, machine marker restored to observed installed runtime4.5.7 after backup; final106 tests left SHA A4CAABE31BB701C2686677F3AC97EA7451B022E0BD729D855D72231060E3C6A3 unchanged. No production app bytes changed.
 - L10: RDD became globally OFF during work; agent did not toggle it. Ordinary functional and independent risk checks retained.
 - L11: #1993 existing work exceeds 400-line review slices (individual prior commits up to2183 authored lines); preserve historical commits and prior review evidence, no aggregate PR published pending proper delivery-size decision.
+
+- L12: #1999 real pnpm12 proof found a second original failure: pnpm12 ignores package.json pnpm.overrides. Bounded correction derives staged workspace override settings, isolates nested Pi workspace, preserves source workspace bytes. RED2 then GREEN108 installer tests; actual10/12 recheck pending.
+- L13: Merged #2003/#2004 worktree removal unregistered both but failed with Directory not empty; residual owned directories retained. Further recursive cleanup was rejected by execution policy; no alternate deletion attempted. Their local branches removed after merge proof; all remote branches preserved. Biome worktree retained temporarily as dependency cache for the active large-diff verification tree.
