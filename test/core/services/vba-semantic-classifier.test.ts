@@ -22,6 +22,49 @@ import {
 // Fixture constants (real-shaped snippets, trimmed for test use)
 // ---------------------------------------------------------------------------
 
+describe("legacy bare CodeBehind layout ownership (#2002)", () => {
+  it.each(["form.txt", "report.txt"])("ignores legacy code serialization in %s", (fileType) => {
+    const layout = "Version =21\nBegin Form\n    Width =9000\nEnd\n";
+    const body = "Option Explicit\nPublic Sub Run()\nEnd Sub";
+    const result = classifyVbaPair({
+      sourceText: `${layout}CodeBehind\n${body}`,
+      binaryText: `${layout}CodeBehind${fileType === "form.txt" ? "Form" : "Report"}\nAttribute VB_Name = "Example"\n${body}`,
+      fileType,
+      mode: "semantic",
+    });
+    expect(result.actionable).toBe(false);
+    expect(result.srcUniqueFunctionalLines).toBe(0);
+    expect(result.binaryUniqueFunctionalLines).toBe(0);
+  });
+
+  it("retains a real layout change before the legacy marker", () => {
+    const result = classifyVbaPair({
+      sourceText: "Begin Form\nEnd\nCodeBehind\nOption Explicit",
+      binaryText: "Begin Form\n    AutoResize = NotDefault\nEnd\nCodeBehindForm\nOption Explicit",
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+    expect(result.actionable).toBe(true);
+    expect(result.srcUniqueFunctionalLines).toBe(0);
+    expect(result.binaryUniqueFunctionalLines).toBe(1);
+  });
+
+  it("keeps strict serialization and standalone class code changes actionable", () => {
+    for (const [fileType, mode] of [
+      ["form.txt", "strict"],
+      ["cls", "semantic"],
+    ] as const) {
+      const result = classifyVbaPair({
+        sourceText: "CodeBehind\nPublic Sub Run()\n    Debug.Print 1\nEnd Sub",
+        binaryText: "CodeBehindForm\nPublic Sub Run()\n    Debug.Print 2\nEnd Sub",
+        fileType,
+        mode,
+      });
+      expect(result.actionable).toBe(true);
+    }
+  });
+});
+
 /** Real-shaped snippet from Form_FormCPV.form.txt — lines 1-7 */
 const FORM_CPV_HEADER = `Version =21
 VersionRequired =20
