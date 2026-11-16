@@ -63,7 +63,8 @@ describe("MCP E2E resumable cursor", () => {
     await writeFile(join(runtime, "package.json"), '{"version":"2.31.0"}');
     const execute = vi.fn();
 
-    await prepareReleaseRuntime(repo, { env: {}, execute });
+    const env = { DYSFLOW_RUNTIME_MARKER_PATH: join(root, "host.marker"), CI: "true" };
+    await prepareReleaseRuntime(repo, { env, execute });
 
     expect(execute).toHaveBeenCalledTimes(2);
     expect(execute.mock.calls[0][1]).toEqual(
@@ -75,7 +76,20 @@ describe("MCP E2E resumable cursor", () => {
       "--runtime-dir",
       join(repo, "test-runtime"),
       "--no-tui",
+      "--exclude",
+      "opencode,claude,codex,cursor,pi",
     ]);
+    for (const [, , options] of execute.mock.calls) {
+      expect(options).toMatchObject({
+        cwd: repo,
+        windowsHide: true,
+        env: {
+          CI: "true",
+          DYSFLOW_RUNTIME_MARKER_PATH: join(repo, "test-runtime", ".e2e-runtime-marker"),
+        },
+      });
+    }
+    expect(env.DYSFLOW_RUNTIME_MARKER_PATH).toBe(join(root, "host.marker"));
     await expect(
       prepareReleaseRuntime(repo, {
         env: { DYSFLOW_E2E_COMMAND: "C:\\production\\dysflow.cmd" },
