@@ -1,4 +1,5 @@
 import {
+  dysflowErrorText,
   renderDysflowCallText,
   renderDysflowResultText,
 } from "./dysflow-tool-chrome.js";
@@ -75,7 +76,7 @@ export function createDysflowNativeTool(options: NativeToolOptions) {
           },
         });
         if (result.isError === true) {
-          throw new Error("Dysflow operation failed.");
+          throw new Error(dysflowErrorText(result));
         }
         return {
           content: toPiContent(result.content),

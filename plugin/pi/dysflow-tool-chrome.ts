@@ -1,6 +1,7 @@
 type ToolResult = {
   content?: Array<{ type?: string; text?: string }>;
   details?: { mcpResult?: unknown } | Record<string, unknown>;
+  structuredContent?: unknown;
   isError?: boolean;
 };
 
@@ -56,12 +57,72 @@ function firstText(result: ToolResult): string {
 
 function mcpResult(result: ToolResult): Record<string, unknown> | undefined {
   const details = record(result.details);
-  return record(details?.mcpResult) ?? details;
+  return record(details?.mcpResult) ?? details ?? record(result);
 }
 
 function structuredResult(result: ToolResult): Record<string, unknown> | undefined {
   const raw = mcpResult(result);
-  return record(raw?.structuredContent) ?? record(raw?.data) ?? raw;
+  const structured = record(raw?.structuredContent) ?? record(raw?.data);
+  if (structured) return structured;
+  try {
+    const parsed = record(JSON.parse(firstText(result)));
+    return parsed?.schemaVersion === "dysflow.result/v1" &&
+      (parsed.ok === false || parsed.isError === true)
+      ? parsed
+      : raw;
+  } catch {
+    return raw;
+  }
+}
+
+function typedError(result: ToolResult): Record<string, unknown> | undefined {
+  const data = structuredResult(result);
+  const error = record(data?.error);
+  return data?.schemaVersion === "dysflow.result/v1" &&
+    (data.ok === false || data.isError === true) &&
+    typeof error?.code === "string" &&
+    /^[A-Z][A-Z0-9_]{0,95}$/.test(error.code)
+    ? error
+    : undefined;
+}
+
+function diagnosticText(value: unknown, limit: number): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return value
+    .replace(/\b(password|pwd|token|secret|authorization|api[_-]?key)["']?\s*[:=]\s*(?:(?:Bearer|Basic)\s+)?(?:"[^"]*"|'[^']*'|[^\s,;}]+)/gi, "$1=[redacted]")
+    .replace(/(?:[A-Z]:[\\/]+|[\\/]{2,})(?:[^\\/\r\n"'<>|;:]+[\\/]+)*[^\s\\/"'<>|;:,]+/gi, "[path]")
+    .replace(/(?<![\w:/])\/(?:[^/\r\n"'<>|;:]+\/)*[^\s/"'<>|;:,]+/g, "[path]")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .slice(0, limit);
+}
+
+/** Preserve actionable typed diagnostics without exposing raw backend payloads. */
+export function dysflowErrorText(result: ToolResult): string {
+  const source = typedError(result);
+  if (!source) return "Dysflow operation failed.";
+  const error: Record<string, unknown> = { code: source.code };
+  for (const key of ["message", "remediation", "missingParam", "rejectedFlag"]) {
+    const text = diagnosticText(source[key], key === "message" ? 800 : 400);
+    if (text !== undefined) error[key] = text;
+  }
+  const details = record(source.details);
+  if (Array.isArray(details?.failures)) {
+    error.details = {
+      failures: details.failures.slice(0, 10).map((failure) => {
+        const entry = record(failure);
+        return {
+          procedure: diagnosticText(entry?.procedure, 100),
+          error: diagnosticText(entry?.error, 250),
+        };
+      }),
+    };
+  }
+  const envelope = { schemaVersion: "dysflow.result/v1", isError: true, ok: false, error };
+  const failures = record(error.details)?.failures;
+  while (Array.isArray(failures) && failures.length && JSON.stringify(envelope).length > 8_000) {
+    failures.pop();
+  }
+  return JSON.stringify(envelope);
 }
 
 function findArrayLength(data: Record<string, unknown> | undefined, key: string): number | undefined {
@@ -82,6 +143,8 @@ export function compactDysflowResultStatus(
   options: RenderOptions = {},
 ): string {
   if (options.isPartial) return `⚠ ${operationLabel(toolName)}…`;
+  const error = typedError(result);
+  if (error) return `✗ Dysflow failed · ${error.code}`;
   if (options.isError || result.isError) return "✗ Dysflow failed";
 
   const data = structuredResult(result);

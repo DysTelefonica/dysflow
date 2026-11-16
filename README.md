@@ -28,6 +28,10 @@ Semantic verification compares form/report layout in `.form.txt` / `.report.txt`
 and code-behind in the sibling `.cls`. Both current `CodeBehindForm` /
 `CodeBehindReport` and legacy bare `CodeBehind` section markers are recognized;
 real layout changes remain actionable, and strict comparison stays exact.
+Large functional diffs retain ordered common prefixes and suffixes before the
+bounded comparison of their remaining middle. A single inserted property or
+missing module identity therefore reports its real count and direction; large
+unresolved statement reorders remain conservatively actionable.
 
 **72 visible MCP tools by default · 95 callable · Windows / Node 26**
 
