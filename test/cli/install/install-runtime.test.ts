@@ -79,6 +79,9 @@ let runtimePaths: RuntimePaths;
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "dysflow-install-docs-"));
+  vi.stubEnv("ProgramData", root);
+  vi.stubEnv("ALLUSERSPROFILE", root);
+  vi.stubEnv("DYSFLOW_RUNTIME_MARKER_PATH", join(root, ".dysflow-marker"));
   runtimeDir = join(root, "runtime");
   const packageRoot = join(root, "pkg");
   await seedPackageRoot(packageRoot);
@@ -93,6 +96,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await rm(root, { recursive: true, force: true });
 });
 
@@ -103,6 +107,109 @@ async function importExtractor(): Promise<
 }
 
 describe("installRuntime — runtime docs must be copied alongside dist (#940)", () => {
+  it("preserves signed override settings for pnpm 12 without leaking them into Pi (#1999)", async () => {
+    const packageRoot = join(root, "pkg");
+    const overrides = { "fast-uri@<3.1.3": ">=4.1.3" };
+    const manifest = JSON.stringify({ name: "dysflow", version: "0.0.0", pnpm: { overrides } });
+    await writeFile(runtimePaths.packageJsonSource, manifest);
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      void readFile(join(options.cwd, "pnpm-workspace.yaml"), "utf8").then(
+        (workspace) => {
+          const expected = options.cwd.endsWith(join("plugin", "pi")) ? {} : { overrides };
+          callback(
+            JSON.stringify(JSON.parse(workspace)) === JSON.stringify(expected)
+              ? null
+              : new Error("ERR_PNPM_LOCKFILE_CONFIG_MISMATCH: overrides"),
+            "",
+            "",
+          );
+        },
+        () => callback(new Error("ERR_PNPM_LOCKFILE_CONFIG_MISMATCH: missing overrides")),
+      );
+    });
+
+    const { installRuntime } = await importExtractor();
+    const report = await installRuntime(runtimePaths, packageRoot);
+    expect(await readFile(runtimePaths.packageJsonSource, "utf8")).toBe(manifest);
+    expect(
+      JSON.parse(await readFile(join(runtimePaths.appDir, "pnpm-workspace.yaml"), "utf8")),
+    ).toEqual({ overrides });
+    expect(
+      JSON.parse(await readFile(join(runtimePaths.piFacadeDest, "pnpm-workspace.yaml"), "utf8")),
+    ).toEqual({});
+    expect(report.copiedFiles.some((file) => file.endsWith("pnpm-workspace.yaml"))).toBe(false);
+  });
+
+  it("preserves existing workspace configuration byte-for-byte (#1999)", async () => {
+    const packageRoot = join(root, "pkg");
+    const workspace = "# release settings\npackages:\n  - .\noverrides:\n  fast-uri: 4.1.3\n";
+    await writeFile(join(packageRoot, "pnpm-workspace.yaml"), workspace);
+    await writeFile(
+      join(runtimePaths.piFacadeSource, "pnpm-workspace.yaml"),
+      "# Pi settings\npackages: ['.']\n",
+    );
+
+    const { installRuntime } = await importExtractor();
+    await installRuntime(runtimePaths, packageRoot);
+    expect(await readFile(join(runtimePaths.appDir, "pnpm-workspace.yaml"), "utf8")).toBe(
+      workspace,
+    );
+    expect(await readFile(join(runtimePaths.piFacadeDest, "pnpm-workspace.yaml"), "utf8")).toBe(
+      "# Pi settings\npackages: ['.']\n",
+    );
+  });
+
+  it.each(["runtime", "Pi facade"])(
+    "preserves the installed runtime and state when %s dependencies fail (#1999)",
+    async (phase) => {
+      const packageRoot = join(root, "pkg");
+      const statePath = join(runtimeDir, ".dysflow-install-state.json");
+      await mkdir(join(runtimePaths.appDir, "node_modules"), { recursive: true });
+      await mkdir(join(runtimePaths.appDir, "dist"), { recursive: true });
+      await writeFile(join(runtimePaths.appDir, "dist", "index.js"), "old runtime");
+      await writeFile(join(runtimePaths.appDir, "package.json"), '{"version":"1.0.0"}');
+      await writeFile(join(runtimePaths.appDir, "node_modules", "sentinel"), "old dependencies");
+      await writeFile(statePath, '{"version":"1.0.0","channel":"stable"}');
+      execFileMock.mockImplementation((_file, _args, options, callback) => {
+        const isPi = options.cwd.endsWith(join("plugin", "pi"));
+        queueMicrotask(() =>
+          callback(isPi === (phase === "Pi facade") ? new Error("dependency failure") : null),
+        );
+      });
+
+      const { installRuntime } = await importExtractor();
+      await expect(installRuntime(runtimePaths, packageRoot)).rejects.toThrow(/Retry dysflow/);
+
+      expect(await readFile(join(runtimePaths.appDir, "dist", "index.js"), "utf8")).toBe(
+        "old runtime",
+      );
+      expect(await readFile(join(runtimePaths.appDir, "package.json"), "utf8")).toBe(
+        '{"version":"1.0.0"}',
+      );
+      expect(await readFile(join(runtimePaths.appDir, "node_modules", "sentinel"), "utf8")).toBe(
+        "old dependencies",
+      );
+      expect(await readFile(statePath, "utf8")).toBe('{"version":"1.0.0","channel":"stable"}');
+    },
+  );
+
+  it("installs a fresh dependency graph instead of reusing broken old links (#1999)", async () => {
+    await mkdir(join(runtimePaths.appDir, "node_modules"), { recursive: true });
+    await writeFile(join(runtimePaths.appDir, "node_modules", "broken-link"), "stale");
+    execFileMock.mockImplementation((_file, _args, options, callback) => {
+      void access(join(options.cwd, "node_modules", "broken-link")).then(
+        () => callback(new Error("stale node_modules reused")),
+        () => callback(null, "", ""),
+      );
+    });
+
+    const { installRuntime } = await importExtractor();
+    await installRuntime(runtimePaths, join(root, "pkg"));
+    await expect(
+      access(join(runtimePaths.appDir, "node_modules", "broken-link")),
+    ).rejects.toThrow();
+  });
+
   it("copies references/error-codes.md from packageRoot into <runtimeDir>/references/", async () => {
     const packageRoot = join(root, "pkg");
 

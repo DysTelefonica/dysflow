@@ -27,6 +27,9 @@ beforeAll(async () => {
   isolatedProcessHome = await mkdtemp(join(tmpdir(), "dysflow-install-suite-home-"));
   process.env.USERPROFILE = isolatedProcessHome;
   process.env.HOME = isolatedProcessHome;
+  vi.stubEnv("ProgramData", isolatedProcessHome);
+  vi.stubEnv("ALLUSERSPROFILE", isolatedProcessHome);
+  vi.stubEnv("DYSFLOW_RUNTIME_MARKER_PATH", join(isolatedProcessHome, ".dysflow-marker"));
 });
 
 afterAll(async () => {
@@ -34,6 +37,7 @@ afterAll(async () => {
   else process.env.USERPROFILE = originalUserProfile;
   if (originalHome === undefined) delete process.env.HOME;
   else process.env.HOME = originalHome;
+  vi.unstubAllEnvs();
   await rm(isolatedProcessHome, { recursive: true, force: true });
 });
 
@@ -55,13 +59,13 @@ execFileMock.mockImplementation((_file, _args, options, callback) => {
 });
 
 import {
-  applyIntegrationSelection,
   createGitHubReleaseRequestHeaders,
   createGitHubReleaseUpdateProvider,
   DYSSKILL_NAMES,
+  handleInstallCommand as executeInstallCommand,
+  applyIntegrationSelection as executeIntegrationSelection,
+  handleUpdateCommand as executeUpdateCommand,
   formatAgentsLine,
-  handleInstallCommand,
-  handleUpdateCommand,
   hasDysflowMcpConfig,
   MAX_PACKAGE_ROOT_DEPTH,
   MAX_SUBPROCESS_BUFFER_BYTES,
@@ -75,6 +79,29 @@ import {
   writeRuntimeLaunchers,
 } from "../../src/cli/commands/install";
 import { compareVersions } from "../../src/core/utils/version";
+
+// Explicit fixture envs must not fall back to the machine's shared runtime marker.
+function isolatedContext<T extends { env?: NodeJS.ProcessEnv }>(context: T): T {
+  const env = context.env ?? process.env;
+  return {
+    ...context,
+    env: {
+      ...env,
+      ProgramData: env.ProgramData ?? isolatedProcessHome,
+      ALLUSERSPROFILE: isolatedProcessHome,
+      DYSFLOW_RUNTIME_MARKER_PATH:
+        env.DYSFLOW_RUNTIME_MARKER_PATH ??
+        join(env.ProgramData ?? isolatedProcessHome, "dysflow", ".dysflow-marker"),
+    },
+  };
+}
+
+const applyIntegrationSelection: typeof executeIntegrationSelection = (args, context = {}) =>
+  executeIntegrationSelection(args, isolatedContext(context));
+const handleInstallCommand: typeof executeInstallCommand = (args, context = {}) =>
+  executeInstallCommand(args, isolatedContext(context));
+const handleUpdateCommand: typeof executeUpdateCommand = (args, context = {}) =>
+  executeUpdateCommand(args, isolatedContext(context));
 
 const readJson = async (path: string): Promise<Record<string, unknown>> => {
   const raw = await readFile(path, "utf8");
@@ -551,6 +578,44 @@ describe("resolvePackageRoot", () => {
 });
 
 describe("handleInstallCommand end-to-end", () => {
+  it("installs independently of pnpm host lockfile and linker defaults (#1999)", async () => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-install-pnpm-"));
+    const runtimeDir = join(root, "runtime");
+    const home = join(root, "home");
+    const packageRoot = await createPackageRoot(root, "9.9.9", "NEW_RUNTIME");
+    await writeFile(join(packageRoot, "pnpm-lock.yaml"), "settings:\n  autoInstallPeers: true\n");
+    const originalImplementation = execFileMock.getMockImplementation();
+    execFileMock.mockImplementation((_file, args, options, callback) => {
+      const isPi = options.cwd.endsWith(join("plugin", "pi"));
+      const valid =
+        args.includes(`--config.auto-install-peers=${!isPi}`) &&
+        args.includes("--config.node-linker=hoisted") &&
+        args.includes("--config.exclude-links-from-lockfile=false");
+      queueMicrotask(() =>
+        callback(valid ? null : new Error("ERR_PNPM_LOCKFILE_CONFIG_MISMATCH"), "", ""),
+      );
+    });
+    try {
+      const result = await handleInstallCommand(
+        ["--runtime-dir", runtimeDir, "--agents", "pi", "--channel", "stable", "--no-tui"],
+        {
+          env: { USERPROFILE: home },
+          packageRoot,
+          piPackageCommandRunner: simulatedPiPackageRunner,
+        },
+      );
+      expect(result.stderr).toBe("");
+      expect(result.exitCode).toBe(0);
+      expect((await readJson(join(runtimeDir, "app", "package.json"))).version).toBe("9.9.9");
+      expect((await readJson(join(runtimeDir, ".dysflow-install-state.json"))).version).toBe(
+        "9.9.9",
+      );
+    } finally {
+      if (originalImplementation) execFileMock.mockImplementation(originalImplementation);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("creates an explicitly selected skill-only adapter target without configuring its MCP", async () => {
     const root = await mkdtemp(join(tmpdir(), "dysflow-install-cursor-skills-"));
     const home = join(root, "home");
