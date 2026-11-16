@@ -150,6 +150,11 @@ keeps each assertion independent in the report and scannable for reviewers.
 
 ### Pre-release — full battery
 
+The tag-triggered release workflow owns the automatic full battery. Use
+`Access E2E (manual)` for an on-demand runner execution; do not duplicate that
+authority with a local agent-run pre-tag gate. For an intentional local operator
+run, isolate both runtime registration and agent profiles as shown below.
+
 ```powershell
 # From the repo root.
 $env:ACCESS_VBA_PASSWORD = "<fixture password>"
@@ -159,8 +164,17 @@ git pull --ff-only origin main
 pnpm build
 
 # 2. Install into the throwaway test runtime. This writes launchers under bin/
-#    and the canonical runtime distribution under app/dist/.
-node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui
+#    and the canonical runtime distribution under app/dist/. runtime-dir alone
+#    does not isolate user skills, instruction pointers, or the global marker.
+$markerBefore = $env:DYSFLOW_RUNTIME_MARKER_PATH
+try {
+    $env:DYSFLOW_RUNTIME_MARKER_PATH = Join-Path $env:TEMP (
+        "dysflow-e2e-" + [guid]::NewGuid().ToString("N") + ".marker"
+    )
+    node dist/cli/index.js install --runtime-dir .\test-runtime --no-tui --exclude opencode,claude,codex,cursor,pi
+} finally {
+    $env:DYSFLOW_RUNTIME_MARKER_PATH = $markerBefore
+}
 
 # 3. Run the harness. Auto-uses test-runtime/bin/dysflow.cmd.
 pnpm test:e2e:mcp:release

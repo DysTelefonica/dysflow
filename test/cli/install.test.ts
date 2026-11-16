@@ -3,6 +3,7 @@ import {
   cp,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   readlink,
   rm,
@@ -181,6 +182,109 @@ async function createPackageRoot(root: string, version: string, marker: string):
 async function seedBundledSkills(packageRoot: string): Promise<void> {
   await cp(join(process.cwd(), "skills"), join(packageRoot, "skills"), { recursive: true });
 }
+
+describe("Access workflow runtime installation isolation", () => {
+  it.each(
+    ["release.yml", "access-e2e-manual.yml"].flatMap((workflow) =>
+      [true, false].map((ci) => ({ workflow, ci })),
+    ),
+  )("preserves host profiles and marker for $workflow (CI=$ci)", async ({ workflow, ci }) => {
+    const root = await mkdtemp(join(tmpdir(), "dysflow-workflow-isolation-"));
+    try {
+      const lines = (
+        await readFile(join(process.cwd(), ".github", "workflows", workflow), "utf8")
+      ).split(/\r?\n/);
+      const runIndex = lines.findIndex((line) =>
+        /^\s*(?:run:\s*)?node dist\/cli\/index\.js install\b/.test(line),
+      );
+      expect(
+        runIndex,
+        "the workflow must expose its canonical runtime installer command",
+      ).toBeGreaterThan(-1);
+      let start = runIndex;
+      while (start > 0 && !/^ {6}- /.test(lines[start] ?? "")) start--;
+      const nextStep = lines.findIndex((line, index) => index > runIndex && /^ {6}- /.test(line));
+      const markerLine = lines
+        .slice(start, nextStep < 0 ? undefined : nextStep)
+        .find((line) => /^\s*DYSFLOW_RUNTIME_MARKER_PATH:/.test(line));
+      const machineRoot = join(root, "machine");
+      const machineMarker = join(machineRoot, "dysflow", ".dysflow-marker");
+      const marker =
+        markerLine === undefined
+          ? machineMarker
+          : markerLine
+              .slice(markerLine.indexOf(":") + 1)
+              .trim()
+              .replace(/\$\{\{\s*runner\.temp\s*\}\}/g, root)
+              .replaceAll("\\", "/");
+      expect(
+        resolve(marker).startsWith(`${resolve(root)}/`) ||
+          resolve(marker).startsWith(`${resolve(root)}\\`),
+      ).toBe(true);
+      const args = (lines[runIndex] ?? "")
+        .replace(/^\s*(?:run:\s*)?node dist\/cli\/index\.js install\s*/, "")
+        .trim()
+        .split(/\s+/);
+      const runtimeIndex = args.indexOf("--runtime-dir") + 1;
+      expect(runtimeIndex).toBeGreaterThan(0);
+      const runtimeDir = resolve(root, (args[runtimeIndex] ?? "").replaceAll("\\", "/"));
+      args[runtimeIndex] = runtimeDir;
+      const home = join(root, "host-home");
+      const pi = join(root, "external-pi");
+      const profiles = [
+        [
+          join(home, ".config", "opencode", "skills"),
+          join(home, ".config", "opencode", "AGENTS.md"),
+        ],
+        [join(home, ".claude", "skills"), join(home, ".claude", "CLAUDE.md")],
+        [join(home, ".codex", "skills"), join(home, ".codex", "AGENTS.md")],
+        [join(home, ".cursor", "skills"), join(home, ".cursor", "rules", "dysflow-vba.mdc")],
+        [join(pi, "skills"), join(pi, "APPEND_SYSTEM.md")],
+      ] as const;
+      const ownerPointer = (pointer: string) =>
+        pointer.endsWith(".mdc")
+          ? '---\ndescription: Owner sentinel\nglobs: "**/*"\nalwaysApply: false\n---\nHOST_INSTRUCTIONS\n'
+          : "HOST_INSTRUCTIONS\n";
+      for (const [skills, pointer] of profiles) {
+        await mkdir(skills, { recursive: true });
+        await mkdir(dirname(pointer), { recursive: true });
+        await writeFile(join(skills, "keep.txt"), "HOST_SKILL");
+        await writeFile(pointer, ownerPointer(pointer));
+      }
+      await mkdir(dirname(machineMarker), { recursive: true });
+      const previousMarker = `1\n${join(root, "previous-runtime")}\n`;
+      await writeFile(machineMarker, previousMarker);
+      const packageRoot = await createPackageRoot(root, "0.1.0", "ISOLATED_RUNTIME");
+      const result = await handleInstallCommand(args, {
+        packageRoot,
+        env: {
+          USERPROFILE: home,
+          HOME: home,
+          ProgramData: machineRoot,
+          PI_CODING_AGENT_DIR: pi,
+          DYSFLOW_RUNTIME_MARKER_PATH: marker,
+          ...(ci ? { CI: "true" } : {}),
+        },
+        piPackageCommandRunner: simulatedPiPackageRunner,
+      });
+      expect(result.exitCode, result.stderr).toBe(0);
+      expect.soft(await readFile(machineMarker, "utf8")).toBe(previousMarker);
+      for (const [skills, pointer] of profiles) {
+        expect.soft(await readdir(skills)).toEqual(["keep.txt"]);
+        expect.soft(await readFile(pointer, "utf8")).toBe(ownerPointer(pointer));
+      }
+      expect(await readFile(join(runtimeDir, "app", "dist", "cli", "index.js"), "utf8")).toBe(
+        "ISOLATED_RUNTIME",
+      );
+      expect(await readJson(join(runtimeDir, ".dysflow-install-state.json"))).toMatchObject({
+        version: "0.1.0",
+      });
+      expect(await readFile(marker, "utf8")).toContain(runtimeDir);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("install arg parsing", () => {
   it("rejects release tags that are not exact semantic version tags", () => {
