@@ -5,6 +5,22 @@ to make manual maintenance decisions auditable and visible in CI.
 
 ## Automation
 
+Materialize `docs/releases/<tag>/release-notes.md` in the release PR, using the
+[v4.5.10 reader-oriented model](./releases/v4.5.10/release-notes.md). Cover the range from the
+previous **published** release, not the nearest failed/unpublished Git tag.
+Account for every merged PR, direct commit and linked closing issue; distinguish
+already shipped integration history from new functionality. Include before/after/
+where descriptions, provenance, verification, upgrade/rollback and unresolved work.
+
+`scripts/check-release-notes.mjs` checks the tag title and required structure before
+the release build; the publisher passes that exact file through `body_path`.
+This structural check does not replace exhaustive range/closure coverage review.
+The current-version CI anchor also prevents a version bump without its notes file.
+
+Run `node scripts/check-release-notes.mjs <version-tag>` from the repository root
+to check the title and required sections; `--help` prints its usage. Missing,
+empty or mismatched files and unexpected arguments fail without modifying notes.
+
 The canonical release workflow is `scripts/release-prepare.ps1`, and it runs in
 two phases because `main` is protected.
 
@@ -44,7 +60,10 @@ The script:
      `needs`. Nothing is published to a package registry; the Pi package ships
      inside the archive.
 
-Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
+Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract.
+
+They cover a generated entry that passes the real Vitest quality gate and a
+deliberately collapsed entry that aborts before release Git writes.
 
 Run them with:
 
@@ -52,7 +71,14 @@ Run them with:
 
 **Operator workflow**:
 
-pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4 pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0 pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+Point `$audit` at the current candidate-bound semantic report, then choose the bump:
+
+```text
+$audit = "C:\audit\semantic-audit.json"
+pwsh -File scripts/release-prepare.ps1 -Bump patch -SemanticAuditEvidencePath $audit
+pwsh -File scripts/release-prepare.ps1 -Bump minor -SemanticAuditEvidencePath $audit
+pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 -SemanticAuditEvidencePath $audit
+```
 
 If a release commit was already prepared but exact-SHA CI prevented the tag, fix the blocker through the normal issue/PR path.
 
@@ -204,9 +230,10 @@ publication on failure.
 
 Agents must not run it locally as a pre-tag gate.
 
-Every pull request and every push to `main` runs only the cheap `CI` job
-(`pnpm lint`, `pnpm build`, `pnpm mcp:context-budget`, `pnpm test`). The Access E2E battery runs
-automatically only on the release tag.
+Every pull request and every push to `main` runs only the cheap `CI` job.
+
+It runs `pnpm lint`, `pnpm build`, `pnpm mcp:context-budget` and `pnpm test`.
+The Access E2E battery runs automatically only on the release tag.
 
 On demand it runs through the manual `Access E2E (manual)` workflow
 (`.github/workflows/access-e2e-manual.yml`), which gates nothing.
