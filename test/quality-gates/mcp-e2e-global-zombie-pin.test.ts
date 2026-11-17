@@ -1,31 +1,7 @@
-// Cheap regression pin for the MSACCESS.EXE zombie-leak class of bugs
-// that surface after a heavy `node E2E_testing/mcp-e2e.mjs` run.
-//
-// The failure mode (`pid 29612` on 2026-06-29): MSACCESS.EXE outlives its
-// dysflow CLI parent (the parent gets killed by `claude` / `node`
-// timeouts / SIGTERM), the PID is NOT registered in `suiteOwnPids`
-// because the harness registration path raced the COM teardown, and
-// the `lingering-access-check` reports `clean` because it only polls
-// `suiteOwnPids`. The PS runner that spawned the orphan never gets
-// caught.
-//
-// The fix has two cheap layers:
-//
-//   1. (preferred) Snapshot the global MSACCESS.EXE table BEFORE the
-//      first scenario (the #1974 preflight read) and AFTER the battery.
-//      A headless PID alive at the end and not at the start escaped
-//      the watch list — fail the lingering-access-check row (#1978).
-//
-//   2. Cheap tests in this file assert the production code carries
-//      the global snapshot comparison AND that the pass condition combines
-//      the suite-owned check with the global count.
-//
-// Without these tests, a future refactor that reverts the fix (or
-// accidentally drops one of the two checks) would re-introduce the
-// silent-zombie leak. The unit-level pin runs in <100ms. The 30-minute
-// heavy e2e would catch the leak on a real run, but at the cost of
-// failing at the very end of the release workflow — exactly the class
-// of regression this Session already paid once.
+// Wiring anchor only: behavioral ownership and PID-reuse proofs live in
+// access-leak-start-snapshot-1978.test.ts. A global process delta is not
+// ownership; the harness combines its child checks with positively attributed
+// survivors from the suite-local operation registry.
 
 // @ts-nocheck — pure source-file lint against a `.mjs`.
 
@@ -58,13 +34,16 @@ describe("mcp-e2e.mjs — global MSACCESS.EXE leak guard (#fix-msaccess-global-z
       /computeAccessLeak\(\{\s*start:\s*globalMsAccessAtStart,\s*end:\s*snapshotAccessProcesses\(\)/,
     );
     expect(src).not.toMatch(/DYSFLOW_E2E_PRE_MSACCESS_COUNT/);
+    expect(src).toMatch(
+      /ownership:\s*await readSuiteAccessOwnership\(\{ projectRoot: tempRoot, accessPath \}\)/,
+    );
   });
 
-  it("tracks a global MSACCESS.EXE leak across the battery", () => {
+  it("tracks positively attributed Access survivors across the battery", () => {
     expect(src).toMatch(/globalMsAccessLeak\s*=\s*globalMsAccessLeakCheck\.leakDelta/);
   });
 
-  it("lingering-access-check row passes ONLY when BOTH suite-owned AND global delta are zero", () => {
+  it("lingering-access-check row passes ONLY when BOTH suite-owned AND attributed survivor count are zero", () => {
     // Pin the combined `pass:` predicate. Reverting to the old form
     // `pass: !hasLingeringAccess` would re-introduce the leak class.
     const rowMatch = src.match(
@@ -73,12 +52,12 @@ describe("mcp-e2e.mjs — global MSACCESS.EXE leak guard (#fix-msaccess-global-z
     expect(rowMatch, "lingering-access-check result emission not found").not.toBeNull();
     expect(
       rowMatch?.[0] ?? "",
-      "lingering-access-check row's `pass` must combine the suite-owned check AND the global delta (= 0).",
+      "lingering-access-check row's `pass` must combine the suite-owned check AND the attributed survivor count (= 0).",
     ).toMatch(/pass\s*:\s*!hasLingeringAccess\s*&&\s*globalMsAccessLeak\s*===\s*0/);
   });
 
   it("reports the global MSACCESS.EXE delta in the lingering-access-check summary when it is non-zero", () => {
-    // Cheap pin: when the global count grew, the row's `summary` (and
+    // Cheap pin: when the attributed survivor count grew, the row's `summary` (and
     // any error message printed to stderr) must name `globalMsAccessLeak`
     // so the operator sees the leak from the report without having to
     // correlate against pre/post counts.

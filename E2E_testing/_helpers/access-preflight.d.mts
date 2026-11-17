@@ -19,13 +19,14 @@ export interface AccessLeakResult {
   endCount: number | null;
   leakDelta: number;
   leaked: AccessProcess[];
+  unattributed: AccessProcess[];
   newInteractive: AccessProcess[];
   summary: string;
 }
 
 export interface AccessPreflightResult {
   kind: "access-preflight";
-  status: "clean" | "refused" | "allowed" | "probe-unavailable";
+  status: "clean" | "observed" | "probe-unavailable";
   pass: boolean;
   foreignHeadless: AccessProcess[];
   foreignInteractive: AccessProcess[];
@@ -43,4 +44,16 @@ export declare function snapshotAccessProcesses(input?: { probe?: () => string }
 export declare function computeAccessLeak(input: {
   start: AccessSnapshot;
   end: AccessSnapshot;
+  ownership?: AccessOwnership;
 }): AccessLeakResult;
+
+export interface AccessOwnership {
+  available: boolean;
+  identities: Array<{ pid: number; creationMs: number }>;
+  reason?: string | null;
+}
+export declare function readSuiteAccessOwnership(input: {
+  projectRoot: string;
+  accessPath: string;
+  read?: (path: string, encoding: string) => Promise<string>;
+}): Promise<AccessOwnership>;

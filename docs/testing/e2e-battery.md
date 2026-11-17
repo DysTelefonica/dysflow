@@ -170,35 +170,36 @@ $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
 # si vuelve a expirar, el fallo nombra la acción, el intento y el tiempo transcurrido (#1974).
 $env:DYSFLOW_E2E_ACCESS_EDIT_TIMEOUT_MS = "120000"
 
-# Arrancar aunque haya MSACCESS.EXE headless ajenos vivos (lo registra como aviso, #1974).
-$env:DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS = "1"
 ```
 
 Antes del primer escenario, la fila `preflight/foreign-access-check` registra los
 `MSACCESS.EXE` headless ajenos a la ejecución, con PID, hora de inicio y línea de comandos (#1974).
 
 - Cuenta como headless `-Embedding`, `/Automation` o una línea de comandos ilegible.
-- Si hay alguno, la batería no arranca (`status=refused`).
-- Con `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS=1` arranca y lo registra como aviso (`status=allowed`).
-- El harness nunca los mata: verifique la propiedad con `list_access_operations`.
-- Elimínelos con `access_force_cleanup_orphaned` y `confirmPid`.
+- Su presencia se registra como aviso (`status=observed`), sin bloquear otros proyectos.
+- `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS` se acepta por compatibilidad, pero ya no es necesaria.
+- El harness no los cierra ni recomienda eliminarlos. Un registro local vacío no demuestra
+  que un proceso de otro proyecto sea huérfano.
 
 La lógica vive en `E2E_testing/_helpers/access-preflight.mjs`.
 
 ### Zombie check
 
 La fila final `zombies/lingering-access-check` falla si queda vivo un PID propio de la suite
-o si la batería deja un `MSACCESS.EXE` headless que no existía al empezar (#1978).
+o si un registro de operación del sandbox demuestra un superviviente propio (#1978).
 
 - La foto de inicio es la misma lectura del preflight, antes del primer escenario.
 - La foto final se toma tras la comprobación de PIDs propios.
 - Un proceso es el mismo solo si coinciden PID y hora de inicio; un PID reutilizado cuenta como nuevo.
-- Los procesos vivos antes de la ejecución nunca cuentan como fuga; de ellos se ocupa el preflight.
+- La atribución exige PID y hora de inicio coincidentes, además del proyecto y la base del sandbox.
+- Un proceso ajeno, anterior o nuevo, permanece intacto. Un cambio global sin atribución se
+  registra como no verificado, no como una fuga de la batería.
 - Una sesión interactiva abierta durante la ejecución se lista, pero no cuenta.
 - El resumen da `start`, `end` y `leakDelta`, y por cada PID fugado su hora de inicio y su línea de comandos.
 - Si alguna foto no se pudo leer, la fila lo registra como `unverified`; no lo da por limpio.
-- El harness nunca mata procesos: verifique con `list_access_operations` y elimine con
-  `access_force_cleanup_orphaned` y `confirmPid`. Nunca mate `MSACCESS.EXE` por nombre.
+- Los registros retenidos no cubren todo el historial: las operaciones completadas se purgan.
+- La limpieza de procesos propios sigue en la función canónica del runtime; este inventario
+  no cierra procesos ni autoriza una limpieza global.
 
 `DYSFLOW_E2E_PRE_MSACCESS_COUNT` se eliminó en #1978: nada la fijaba, y un conteo no puede
 distinguir un proceso ajeno de una fuga. La foto del preflight la sustituye.
@@ -280,7 +281,7 @@ La batería implementa cuatro invariantes duras que viven en
    harness conserva una línea base limpia. El proceso termina con código distinto de cero si
    existe al menos un FAIL.
 4. **UNSAFE-STOP** — un zombie propio, una identidad de runtime/checkpoint inválida, la pérdida
-   de la ruta soportada con contraseña, un preflight global fallido o una postcondición mutante
+   de la ruta soportada con contraseña o una postcondición mutante
    desconocida abortan inmediatamente. Esos fallos se clasifican como `safety-critical`.
 
 > **Por qué abortar, no parchear.** Una herramienta rota que deja un zombie vivo significa

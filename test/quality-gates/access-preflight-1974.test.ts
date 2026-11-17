@@ -40,42 +40,42 @@ describe("issue #1974: battery preflight for foreign Access processes", () => {
     expect(result.foreignHeadless).toEqual([]);
   });
 
-  it("refuses to start when a foreign headless Access process is alive, naming PID, start time and command line", () => {
+  it("observes a foreign headless process without blocking or recommending its removal", () => {
     const { probe } = probeReturning([orphan]);
     const result = runAccessPreflight({ probe, ownPid: OWN_PID, env: {} });
-    expect(result.status).toBe("refused");
-    expect(result.pass).toBe(false);
+    expect(result.status).toBe("observed");
+    expect(result.pass).toBe(true);
     expect(result.foreignHeadless.map((p: { pid: number }) => p.pid)).toEqual([28444]);
     expect(result.summary).toContain("pid=28444");
     expect(result.summary).toContain("2026-10-27T09:00:00.000Z");
     expect(result.summary).toContain("-Embedding");
-    expect(result.summary).toContain("access_force_cleanup_orphaned");
-    expect(result.summary).toContain("confirmPid");
-    expect(result.summary).toContain(ALLOW_FOREIGN_ACCESS_ENV);
+    expect(result.summary).not.toContain("access_force_cleanup_orphaned");
+    expect(result.summary).not.toContain("confirmPid");
+    expect(result.summary).toMatch(/left untouched/i);
     expect(result.summary).toMatch(/never kill MSACCESS\.EXE by name/i);
   });
 
-  it("downgrades the refusal to a recorded warning under the explicit opt-out", () => {
+  it("keeps the old opt-out compatible without requiring it", () => {
     const { probe } = probeReturning([orphan]);
     const result = runAccessPreflight({
       probe,
       ownPid: OWN_PID,
       env: { [ALLOW_FOREIGN_ACCESS_ENV]: "1" },
     });
-    expect(result.status).toBe("allowed");
+    expect(result.status).toBe("observed");
     expect(result.pass).toBe(true);
     expect(result.summary).toContain("pid=28444");
     expect(result.summary).toMatch(/WARNING/);
   });
 
-  it("only accepts the literal opt-out value 1", () => {
+  it("does not require an opt-out to coexist with another project", () => {
     const { probe } = probeReturning([orphan]);
     const result = runAccessPreflight({
       probe,
       ownPid: OWN_PID,
       env: { [ALLOW_FOREIGN_ACCESS_ENV]: "true" },
     });
-    expect(result.status).toBe("refused");
+    expect(result.status).toBe("observed");
   });
 
   it("does not count an Access process this run spawned as foreign", () => {
@@ -97,7 +97,7 @@ describe("issue #1974: battery preflight for foreign Access processes", () => {
   it("treats an unreadable command line as headless, because it cannot be proven interactive", () => {
     const { probe } = probeReturning([{ ...interactive, CommandLine: null }]);
     const result = runAccessPreflight({ probe, ownPid: OWN_PID, env: {} });
-    expect(result.status).toBe("refused");
+    expect(result.status).toBe("observed");
   });
 
   it("records an unavailable probe as a warning instead of a clean pass", () => {
