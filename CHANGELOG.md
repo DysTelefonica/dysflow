@@ -1,5 +1,14 @@
 # Changelog
 
+## [v4.5.10] - 2026-11-17
+
+### Changes
+
+- fix(e2e): attribute Access survivors to suite-owned operations
+- fix(e2e): contain nested release runtime installation
+
+
+
 ## [v4.5.9] - 2026-11-16
 
 ### Changes
