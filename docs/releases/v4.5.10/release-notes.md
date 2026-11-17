@@ -87,25 +87,25 @@ Coverage inventory: **19 PRs, zero commits without a PR, eight linked closing is
 
 | PR | Included change |
 | --- | --- |
-| [#1983](https://github.com/DysTelefonica/dysflow/pull/1983) | TypeBox 1.4.3 |
-| [#1984](https://github.com/DysTelefonica/dysflow/pull/1984) | Vite 8.3.5 |
-| [#1985](https://github.com/DysTelefonica/dysflow/pull/1985) | Runtime MCP SDK 1.32.2 |
-| [#1986](https://github.com/DysTelefonica/dysflow/pull/1986) | Biome 2.6.7 and schema alignment |
-| [#1994](https://github.com/DysTelefonica/dysflow/pull/1994) | Integration of already published v4.5.7 |
-| [#1995](https://github.com/DysTelefonica/dysflow/pull/1995) | CodeQL analyze 4.39.3 |
-| [#1996](https://github.com/DysTelefonica/dysflow/pull/1996) | Release action 3.0.4 |
-| [#1997](https://github.com/DysTelefonica/dysflow/pull/1997) | CodeQL init 4.39.3 |
-| [#1998](https://github.com/DysTelefonica/dysflow/pull/1998) | pnpm setup 6.1.1 |
-| [#2003](https://github.com/DysTelefonica/dysflow/pull/2003) | Legacy code-behind markers |
-| [#2004](https://github.com/DysTelefonica/dysflow/pull/2004) | Bounded, redacted Pi diagnostics |
-| [#2005](https://github.com/DysTelefonica/dysflow/pull/2005) | Ordered-edge large-diff counts |
-| [#2006](https://github.com/DysTelefonica/dysflow/pull/2006) | Transactional dependency staging |
-| [#2007](https://github.com/DysTelefonica/dysflow/pull/2007) | Detached test runs and structured results |
-| [#2008](https://github.com/DysTelefonica/dysflow/pull/2008) | Workflow install containment |
-| [#2009](https://github.com/DysTelefonica/dysflow/pull/2009) | Unpublished intermediate release preparation |
-| [#2010](https://github.com/DysTelefonica/dysflow/pull/2010) | Nested harness install containment |
-| [#2011](https://github.com/DysTelefonica/dysflow/pull/2011) | Owned-process leak attribution |
-| [#2012](https://github.com/DysTelefonica/dysflow/pull/2012) | v4.5.10 preparation and measured metadata budgets |
+| #1983 | TypeBox 1.4.3 |
+| #1984 | Vite 8.3.5 |
+| #1985 | Runtime MCP SDK 1.32.2 |
+| #1986 | Biome 2.6.7 and schema alignment |
+| #1994 | Integration of already published v4.5.7 |
+| #1995 | CodeQL analyze 4.39.3 |
+| #1996 | Release action 3.0.4 |
+| #1997 | CodeQL init 4.39.3 |
+| #1998 | pnpm setup 6.1.1 |
+| #2003 | Legacy code-behind markers |
+| #2004 | Bounded, redacted Pi diagnostics |
+| #2005 | Ordered-edge large-diff counts |
+| #2006 | Transactional dependency staging |
+| #2007 | Detached test runs and structured results |
+| #2008 | Workflow install containment |
+| #2009 | Unpublished intermediate release preparation |
+| #2010 | Nested harness install containment |
+| #2011 | Owned-process leak attribution |
+| #2012 | v4.5.10 preparation and measured metadata budgets |
 
 ## Verification evidence
 

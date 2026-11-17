@@ -5,8 +5,8 @@ to make manual maintenance decisions auditable and visible in CI.
 
 ## Automation
 
-Materialize `docs/releases/<tag>.md` in the release PR, using the
-[v4.5.10 reader-oriented model](./releases/v4.5.10.md). Cover the range from the
+Materialize `docs/releases/<tag>/release-notes.md` in the release PR, using the
+[v4.5.10 reader-oriented model](./releases/v4.5.10/release-notes.md). Cover the range from the
 previous **published** release, not the nearest failed/unpublished Git tag.
 Account for every merged PR, direct commit and linked closing issue; distinguish
 already shipped integration history from new functionality. Include before/after/
@@ -60,7 +60,10 @@ The script:
      `needs`. Nothing is published to a package registry; the Pi package ships
      inside the archive.
 
-Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract, including a generated entry that passes the real Vitest quality gate and a deliberately collapsed entry that aborts before release Git writes.
+Behavioral Pester tests in `scripts/tests/release-prepare.Tests.ps1` pin this contract.
+
+They cover a generated entry that passes the real Vitest quality gate and a
+deliberately collapsed entry that aborts before release Git writes.
 
 Run them with:
 
@@ -68,7 +71,14 @@ Run them with:
 
 **Operator workflow**:
 
-pwsh -File scripts/release-prepare.ps1 -Bump patch    # for v1.10.3 → v1.10.4 pwsh -File scripts/release-prepare.ps1 -Bump minor    # for v1.10.x → v1.11.0 pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 # explicit override
+Point `$audit` at the current candidate-bound semantic report, then choose the bump:
+
+```powershell
+$audit = "C:\audit\semantic-audit.json"
+pwsh -File scripts/release-prepare.ps1 -Bump patch -SemanticAuditEvidencePath $audit
+pwsh -File scripts/release-prepare.ps1 -Bump minor -SemanticAuditEvidencePath $audit
+pwsh -File scripts/release-prepare.ps1 -Version 1.11.2 -SemanticAuditEvidencePath $audit
+```
 
 If a release commit was already prepared but exact-SHA CI prevented the tag, fix the blocker through the normal issue/PR path.
 
@@ -220,9 +230,10 @@ publication on failure.
 
 Agents must not run it locally as a pre-tag gate.
 
-Every pull request and every push to `main` runs only the cheap `CI` job
-(`pnpm lint`, `pnpm build`, `pnpm mcp:context-budget`, `pnpm test`). The Access E2E battery runs
-automatically only on the release tag.
+Every pull request and every push to `main` runs only the cheap `CI` job.
+
+It runs `pnpm lint`, `pnpm build`, `pnpm mcp:context-budget` and `pnpm test`.
+The Access E2E battery runs automatically only on the release tag.
 
 On demand it runs through the manual `Access E2E (manual)` workflow
 (`.github/workflows/access-e2e-manual.yml`), which gates nothing.

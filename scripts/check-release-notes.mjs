@@ -14,7 +14,7 @@ try {
   ) {
     throw new Error(usage);
   }
-  const text = await readFile(resolve("docs", "releases", `${tag}.md`), "utf8");
+  const text = await readFile(resolve("docs", "releases", tag, "release-notes.md"), "utf8");
   if (!text.trim()) throw new Error("Release notes are empty");
   if (text.replace(/^\uFEFF/, "").split(/\r?\n/)[0] !== `# ${tag}`) {
     throw new Error("Release notes title does not match the tag");

@@ -73,9 +73,9 @@ describe("published release notes", () => {
     ({ tag, notes, success }) => {
       const root = mkdtempSync(join(tmpdir(), "dysflow-release-notes-test-"));
       roots.push(root);
-      const dir = join(root, "docs", "releases");
+      const dir = join(root, "docs", "releases", tag);
       mkdirSync(dir, { recursive: true });
-      const path = join(dir, `${tag}.md`);
+      const path = join(dir, "release-notes.md");
       if (notes !== undefined) writeFileSync(path, notes);
       const result = spawnSync(process.execPath, [script, tag], {
         cwd: root,
