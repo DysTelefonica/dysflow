@@ -2,9 +2,17 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const tag = process.argv[2];
+const usage = "Usage: node scripts/check-release-notes.mjs <version-tag>";
+if (tag === "--help" && process.argv.length === 3) {
+  console.log(usage);
+  process.exit(0);
+}
 try {
-  if (!/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag ?? "")) {
-    throw new Error("A version tag is required");
+  if (
+    process.argv.length !== 3 ||
+    !/^v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(tag ?? "")
+  ) {
+    throw new Error(usage);
   }
   const text = await readFile(resolve("docs", "releases", `${tag}.md`), "utf8");
   if (!text.trim()) throw new Error("Release notes are empty");

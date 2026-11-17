@@ -39,6 +39,23 @@ describe("published release notes", () => {
     expect(check).toBeLessThan(workflow.indexOf("run: pnpm build"));
   });
 
+  it("documents usage and refuses an unrecognized explicit option", () => {
+    const help = spawnSync(process.execPath, [script, "--help"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(help.status).toBe(0);
+    expect(help.stdout).toBe("Usage: node scripts/check-release-notes.mjs <version-tag>\n");
+    expect(help.stderr).toBe("");
+    const rejected = spawnSync(process.execPath, [script, "v4.5.10", "--skip"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    expect(rejected.status).toBe(1);
+    expect(rejected.stdout).toBe("");
+    expect(rejected.stderr).toContain("Usage:");
+  });
+
   it.each([
     { tag: "v1.2.3", notes: valid("v1.2.3"), success: true },
     { tag: "v1.2.3-rc.1", notes: valid("v1.2.3-rc.1"), success: true },

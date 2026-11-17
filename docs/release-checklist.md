@@ -17,6 +17,10 @@ the release build; the publisher passes that exact file through `body_path`.
 This structural check does not replace exhaustive range/closure coverage review.
 The current-version CI anchor also prevents a version bump without its notes file.
 
+Run `node scripts/check-release-notes.mjs <version-tag>` from the repository root
+to check the title and required sections; `--help` prints its usage. Missing,
+empty or mismatched files and unexpected arguments fail without modifying notes.
+
 The canonical release workflow is `scripts/release-prepare.ps1`, and it runs in
 two phases because `main` is protected.
 
