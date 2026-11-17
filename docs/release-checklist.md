@@ -73,7 +73,7 @@ Run them with:
 
 Point `$audit` at the current candidate-bound semantic report, then choose the bump:
 
-```powershell
+```text
 $audit = "C:\audit\semantic-audit.json"
 pwsh -File scripts/release-prepare.ps1 -Bump patch -SemanticAuditEvidencePath $audit
 pwsh -File scripts/release-prepare.ps1 -Bump minor -SemanticAuditEvidencePath $audit
