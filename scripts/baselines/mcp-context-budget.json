@@ -12,16 +12,16 @@
       "wireBytes": 84640
     },
     "bootstrap": {
-      "logicalBytes": 1102,
-      "wireBytes": 3807
+      "logicalBytes": 1103,
+      "wireBytes": 3810
     },
     "getCapabilities": {
       "logicalBytes": 62444,
       "wireBytes": 63318
     },
     "getCapabilitiesCompact": {
-      "logicalBytes": 49701,
-      "wireBytes": 50405
+      "logicalBytes": 49702,
+      "wireBytes": 50406
     },
     "schemaFull": {
       "logicalBytes": 833300,
