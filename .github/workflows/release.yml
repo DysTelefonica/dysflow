@@ -43,6 +43,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate tag-specific release notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/check-release-notes.mjs "$RELEASE_TAG"
+
       - name: Stamp release version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -365,6 +370,7 @@ jobs:
         with:
           # AGENTS.md hard rule: the release title MUST equal the tag name.
           name: ${{ github.ref_name }}
+          body_path: docs/releases/${{ github.ref_name }}.md
           files: |
             dysflow-*.tar.gz
             SHA256SUMS

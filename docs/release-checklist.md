@@ -5,6 +5,18 @@ to make manual maintenance decisions auditable and visible in CI.
 
 ## Automation
 
+Materialize `docs/releases/<tag>.md` in the release PR, using the
+[v4.5.10 reader-oriented model](./releases/v4.5.10.md). Cover the range from the
+previous **published** release, not the nearest failed/unpublished Git tag.
+Account for every merged PR, direct commit and linked closing issue; distinguish
+already shipped integration history from new functionality. Include before/after/
+where descriptions, provenance, verification, upgrade/rollback and unresolved work.
+
+`scripts/check-release-notes.mjs` checks the tag title and required structure before
+the release build; the publisher passes that exact file through `body_path`.
+This structural check does not replace exhaustive range/closure coverage review.
+The current-version CI anchor also prevents a version bump without its notes file.
+
 The canonical release workflow is `scripts/release-prepare.ps1`, and it runs in
 two phases because `main` is protected.
 
