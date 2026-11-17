@@ -1,11 +1,10 @@
-// Battery preflight for foreign MSACCESS.EXE processes (#1974).
-//
-// Release run 40519155504 started with a headless `MSACCESS.EXE -Embedding` orphan that was
-// hours old; a stale COM server can slow or hang the Access starts the battery depends on.
-// This check only LISTS processes. It never kills one: removal goes through dysflow
-// `access_force_cleanup_orphaned` with `confirmPid`, after a human verifies ownership.
+// Host inventory is diagnostic, not proof that another project's Access is an orphan.
+// Only positively attributed suite processes affect the owned-leak verdict. This helper
+// never closes processes; operation-owned cleanup remains in the canonical runtime.
 
 import { spawnSync } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 export const ALLOW_FOREIGN_ACCESS_ENV = "DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS";
 
@@ -67,11 +66,9 @@ function describeProcess(process) {
   );
 }
 
-const REMEDIATION =
-  "Remediation: confirm each PID is not owned by a running dysflow operation (list_access_operations) " +
-  "and is headless, then remove it with dysflow access_force_cleanup_orphaned { confirmPid: <pid> }. " +
-  "Never kill MSACCESS.EXE by name; this harness never kills it either. " +
-  `To run anyway, set ${ALLOW_FOREIGN_ACCESS_ENV}=1 (recorded as a warning).`;
+const OWNERSHIP_NOTE =
+  "Other projects' processes are left untouched. Never kill MSACCESS.EXE by name. " +
+  "Owned cleanup remains with the runtime's operation-scoped cleanup function.";
 
 /**
  * Every MSACCESS.EXE alive right now. A probe failure is reported, never read as "none alive".
@@ -94,53 +91,101 @@ function processIdentity(process) {
   return `${process.pid}@${process.creationMs ?? "unknown"}`;
 }
 
-const LEAK_REMEDIATION =
-  "Remediation: confirm each PID is not owned by a running dysflow operation (list_access_operations) " +
-  "and is headless, then remove it with dysflow access_force_cleanup_orphaned { confirmPid: <pid> }. " +
-  "Never kill MSACCESS.EXE by name; this harness never kills it either.";
+/** Retained failed/cleanup-pending operations are positive evidence, not complete history. */
+export async function readSuiteAccessOwnership({ projectRoot, accessPath, read = readFile }) {
+  const samePath = (left, right) => {
+    if (typeof left !== "string" || left.length === 0) return false;
+    const canonical = (value) =>
+      process.platform === "win32" ? resolve(value).toLowerCase() : resolve(value);
+    return canonical(left) === canonical(right);
+  };
+  try {
+    const parsed = JSON.parse(
+      String(
+        await read(join(projectRoot, ".dysflow", "runtime", "operations.json"), "utf8"),
+      ).replace(/^\uFEFF/, ""),
+    );
+    const records = Array.isArray(parsed) ? parsed : parsed.records;
+    if (!Array.isArray(records)) throw new Error("invalid operation registry");
+    const identities = records.flatMap((record) => {
+      if (!record || typeof record !== "object") return [];
+      const creationMs =
+        typeof record.processStartTime === "string" ? Date.parse(record.processStartTime) : NaN;
+      return Number.isInteger(record.accessPid) &&
+        record.accessPid > 0 &&
+        Number.isFinite(creationMs) &&
+        samePath(record.projectRootAbs, projectRoot) &&
+        samePath(record.accessPath, accessPath)
+        ? [{ pid: record.accessPid, creationMs }]
+        : [];
+    });
+    return { available: true, identities, reason: null };
+  } catch (error) {
+    return {
+      available: false,
+      identities: [],
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 /**
- * Global leak verdict (#1978): headless MSACCESS.EXE alive at the end that were not alive at the
- * start snapshot. Processes alive before the run are the preflight's concern, never a leak; a
- * new interactive session is a human's window, listed but not counted. Pure.
- * @param {{ start: ReturnType<typeof snapshotAccessProcesses>, end: ReturnType<typeof snapshotAccessProcesses> }} input
+ * Attribute survivors only with exact PID + creation-time evidence.
+ * Unattributed global changes are not suite leaks and do not authorize cleanup.
+ * Retained operation records are partial evidence; completed records are purged.
  */
-export function computeAccessLeak({ start, end }) {
-  if (!start?.available || !end?.available) {
-    const reason = !start?.available
-      ? `start snapshot unavailable: ${start?.reason ?? "not taken"}`
-      : `end snapshot unavailable: ${end.reason}`;
+export function computeAccessLeak({
+  start,
+  end,
+  ownership = { available: false, identities: [], reason: "not supplied" },
+}) {
+  if (!end?.available) {
+    const reason = `end snapshot unavailable: ${end?.reason ?? "not taken"}`;
     return {
       verified: false,
       startCount: start?.available ? start.processes.length : null,
       endCount: end?.available ? end.processes.length : null,
       leakDelta: 0,
       leaked: [],
+      unattributed: [],
       newInteractive: [],
       summary: `WARNING: global MSACCESS.EXE leak check unverified for this run (${reason}).`,
     };
   }
-  const alive = new Set(start.processes.map(processIdentity));
+  const alive = new Set(start?.available ? start.processes.map(processIdentity) : []);
   const fresh = end.processes.filter((p) => !alive.has(processIdentity(p)));
-  const leaked = fresh.filter((p) => isHeadless(p.commandLine));
-  const newInteractive = fresh.filter((p) => !isHeadless(p.commandLine));
-  const counts = `start=${start.processes.length} end=${end.processes.length} leakDelta=${leaked.length}`;
+  const owned = new Set(
+    ownership.available
+      ? ownership.identities
+          .filter((p) => Number.isInteger(p.pid) && p.pid > 0 && Number.isFinite(p.creationMs))
+          .map(processIdentity)
+      : [],
+  );
+  const headless = fresh.filter((p) => isHeadless(p.commandLine));
+  const leaked = end.processes.filter(
+    (p) => p.creationMs !== null && owned.has(processIdentity(p)),
+  );
+  const unattributed = headless.filter((p) => !leaked.includes(p));
+  const newInteractive = fresh.filter((p) => !isHeadless(p.commandLine) && !leaked.includes(p));
+  const startCount = start?.available ? start.processes.length : null;
+  const counts = `start=${startCount ?? "unavailable"} end=${end.processes.length} leakDelta=${leaked.length}`;
   const interactiveNote =
     newInteractive.length > 0
       ? ` Interactive Access sessions opened during the run, not counted: ${newInteractive.map(describeProcess).join("; ")}.`
       : "";
   return {
-    verified: true,
-    startCount: start.processes.length,
+    verified: Boolean(start?.available && ownership.available && unattributed.length === 0),
+    startCount,
     endCount: end.processes.length,
     leakDelta: leaked.length,
     leaked,
+    unattributed,
     newInteractive,
     summary:
-      leaked.length > 0
-        ? `${leaked.length} headless MSACCESS.EXE alive at the end were not alive before the first ` +
-          `scenario (${counts}): ${leaked.map(describeProcess).join("; ")}.${interactiveNote} ${LEAK_REMEDIATION}`
-        : `No headless MSACCESS.EXE left behind by the battery (${counts}).${interactiveNote}`,
+      `${leaked.length} positively owned Access survivors (${counts}): ${leaked.map(describeProcess).join("; ") || "none"}.` +
+      `${interactiveNote} Unattributed headless delta=${unattributed.length}: ${unattributed.map(describeProcess).join("; ") || "none"}. ` +
+      `Ownership coverage is partial (retained suite operation records only); global absence of suite leaks is unverified. ` +
+      `${ownership.available ? "" : `Registry unavailable: ${ownership.reason}. `}${OWNERSHIP_NOTE}`,
   };
 }
 
@@ -148,11 +193,7 @@ export function computeAccessLeak({ start, end }) {
  * Typed preflight verdict. Processes whose parent is this run are not foreign.
  * @param {{ probe?: () => string, ownPid?: number, env?: Record<string, string | undefined> }} [input]
  */
-export function runAccessPreflight({
-  probe = probeAccessProcesses,
-  ownPid = process.pid,
-  env = process.env,
-} = {}) {
+export function runAccessPreflight({ probe = probeAccessProcesses, ownPid = process.pid } = {}) {
   // #1978: this read is also the start snapshot of the global leak check.
   const snapshot = snapshotAccessProcesses({ probe });
   if (!snapshot.available) {
@@ -189,18 +230,15 @@ export function runAccessPreflight({
     };
   }
   const listed = foreignHeadless.map(describeProcess).join("; ");
-  const allowed = env[ALLOW_FOREIGN_ACCESS_ENV] === "1";
   return {
     kind: "access-preflight",
-    status: allowed ? "allowed" : "refused",
-    pass: allowed,
+    status: "observed",
+    pass: true,
     foreignHeadless,
     foreignInteractive,
     snapshot,
-    summary: allowed
-      ? `WARNING: ${foreignHeadless.length} foreign headless MSACCESS.EXE alive before the first scenario ` +
-        `(${ALLOW_FOREIGN_ACCESS_ENV}=1, battery continues): ${listed}.${interactiveNote} ${REMEDIATION}`
-      : `Refusing to start: ${foreignHeadless.length} foreign headless MSACCESS.EXE alive before the ` +
-        `first scenario: ${listed}.${interactiveNote} ${REMEDIATION}`,
+    summary:
+      `WARNING: ${foreignHeadless.length} foreign headless Access processes observed before the first scenario: ` +
+      `${listed}.${interactiveNote} ${OWNERSHIP_NOTE}`,
   };
 }

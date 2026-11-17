@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   computeAccessLeak,
+  readSuiteAccessOwnership,
   runAccessPreflight,
   snapshotAccessProcesses,
 } from "./_helpers/access-preflight.mjs";
@@ -3664,10 +3665,10 @@ async function waitForNoOwnPids(timeoutMs = 2000, pollMs = 100) {
 // We ALSO compare the MSACCESS.EXE process table before and after the
 // battery (#1978). The start snapshot is the #1974 preflight's own read,
 // taken before the first scenario; the end snapshot is taken after the
-// lingering check below. Every headless MSACCESS.EXE alive at the end that
-// was not alive at the start escaped the suiteOwnPids watch list (e.g. a
-// PS script that spawned MSACCESS.EXE outside the harness child process).
-// Processes alive before the run are excluded; the harness never kills any.
+// lingering check below. Only exact PID/start-time identities retained in this
+// sandbox's operation registry can attribute a DCOM Access survivor to the suite.
+// Other projects can start Access concurrently: an unmatched global delta is
+// unverified diagnostic evidence, never suite ownership or permission to kill.
 const PRUDENT_ZOMBIE_DELAY_MS = 1000;
 const LINGERING_OWN_PID_TIMEOUT_MS = 2000;
 const LINGERING_OWN_PID_POLL_MS = 100;
@@ -3688,6 +3689,7 @@ let globalMsAccessLeakCheck;
   globalMsAccessLeakCheck = computeAccessLeak({
     start: globalMsAccessAtStart,
     end: snapshotAccessProcesses(),
+    ownership: await readSuiteAccessOwnership({ projectRoot: tempRoot, accessPath }),
   });
   globalMsAccessLeak = globalMsAccessLeakCheck.leakDelta;
   console.error(`globalMsAccessCount: ${globalMsAccessLeakCheck.summary}`);
@@ -3715,14 +3717,14 @@ appendUnchecked({
   area: "zombies",
   tool: "lingering-access-check",
   pass: !hasLingeringAccess && globalMsAccessLeak === 0,
-  expected: "no suite-owned MSACCESS.EXE lingering AND global MSACCESS.EXE delta=0 over the battery",
+  expected: "no suite-owned child or positively attributed Access survivor",
   ms: finalZombieMs,
   summary: (() => {
     if (hasLingeringAccess) {
       return `Suite-owned MSACCESS.EXE pids=${(finalZombie?.pids || []).join(",")} still alive after final recheck!`;
     }
     if (globalMsAccessLeak > 0) {
-      return `Global MSACCESS.EXE leak: globalMsAccessLeak=${globalMsAccessLeak}; a process escaped the suiteOwnPids watch list. ${globalMsAccessLeakCheck.summary}`;
+      return `Owned Access leak: globalMsAccessLeak=${globalMsAccessLeak}. ${globalMsAccessLeakCheck.summary}`;
     }
     return `No suite-owned MSACCESS.EXE lingering. ${globalMsAccessLeakCheck.summary}`;
   })(),

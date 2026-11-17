@@ -276,16 +276,19 @@ $env:DYSFLOW_E2E_PRESERVE_SANDBOX = "1"
 # Deterministic sandbox parent (the harness always creates a fresh child under it).
 $env:DYSFLOW_E2E_SANDBOX_ROOT = "D:\diagnostics"
 
-# Start even when foreign headless MSACCESS.EXE processes are alive (recorded as a warning, #1974).
-$env:DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS = "1"
 ```
 
 Before the first scenario, the `preflight/foreign-access-check` row lists every headless
 `MSACCESS.EXE` this run does not own, with PID, start time and command line (#1974).
 
-- The battery refuses to start unless `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS=1`.
-- The harness never kills them. Verify ownership with `list_access_operations`.
-- Remove each one with `access_force_cleanup_orphaned` and `confirmPid`.
+- Other projects may keep using Access: this inventory is a warning, not a global lock.
+- The harness never closes these processes or recommends removing them. An empty local
+  operations registry does not prove ownership of a process from another project.
+- `DYSFLOW_E2E_ALLOW_FOREIGN_ACCESS` is accepted for compatibility but no longer required.
+- Final leak failures require a suite-owned child/descendant or exact PID/start-time
+  evidence from this sandbox's operation registry. An unattributed global delta is reported
+  as unverified, not blamed on the battery. Retained operation records are partial history.
+- Actual owned cleanup remains in the runtime's canonical operation-scoped cleanup path.
 
 If the harness aborts before any tool call, the message names the resolution code
 (`MCP_E2E_REFUSES_PRODUCTION_RUNTIME`, `MCP_E2E_NO_RUNTIME_AVAILABLE`, or
