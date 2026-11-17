@@ -81,9 +81,9 @@ Issue #1462 additionally compacts the `tools/list` descriptions, parameter
 prose, and workflow metadata while keeping all callable property keys and
 safety-critical flags.
 
-The committed baseline records the exact runtime version and parent commit
-used to generate the after-side, so the shrink-only CI gate cannot hide later
-growth.
+The baseline's runtime provenance identifies the original measurement. Any
+later, narrowly measured metadata adjustment must be documented here; the
+ratchet still rejects unexplained growth.
 
 The committed baseline in `scripts/baselines/mcp-context-budget.json` was
 generated from that command and is a ceiling: unchanged values pass, shrinkage
@@ -98,6 +98,21 @@ node scripts/mcp-context-budget.mjs --write-baseline
 
 That update must be accompanied by the change that explains the reduced
 surface. Do not update the baseline to hide growth.
+
+### Release-version width adjustment: 4.5.10
+
+The extra character in `4.5.10` adds one logical byte to bootstrap and compact
+capabilities. Bootstrap repeats the small payload in three wire projections,
+adding three wire bytes; compact capabilities add one wire byte. Measurements
+at `2d0b46e2469393408c7161ec9482a82425377538` justify only these ceilings:
+
+- `bootstrap`: logical `1102` → `1103`, wire `3807` → `3810`.
+- `getCapabilitiesCompact`: logical `49701` → `49702`, wire `50405` → `50406`.
+
+Every other ceiling, the comparison algorithm and runtime tool contracts remain
+unchanged. This is visible serialized version metadata, not a surface reduction
+or a blanket baseline regeneration. Full capabilities contain two version
+fields; their existing ceiling is not increased.
 
 Do not add a tokenizer estimate as if it were a provider-independent fact.
 
