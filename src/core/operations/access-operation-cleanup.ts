@@ -74,6 +74,32 @@ export class AccessOperationCleanupService {
     return this.options.startingStaleMs ?? DEFAULT_STARTING_STALE_MS;
   }
 
+  /**
+   * #2017 — a failed process probe (the PowerShell command exits non-zero or
+   * hits its timeout) is a typed cleanup failure, never a thrown error. Without
+   * the probe the process cannot be identified, so nothing is killed.
+   */
+  private async inspectProcess(
+    pid: number,
+  ): Promise<
+    | { ok: true; process: OsProcessInfo | undefined }
+    | { ok: false; failure: OperationResult<never> }
+  > {
+    try {
+      return { ok: true, process: await this.options.processInspector.getProcess(pid) };
+    } catch (error) {
+      return {
+        ok: false,
+        failure: failureResult(
+          createDysflowError(
+            "CLEANUP_INSPECTION_FAILED",
+            `Cleanup could not inspect PID ${pid}, so it killed nothing: ${formatError(error)}`,
+          ),
+        ),
+      };
+    }
+  }
+
   async cleanup(request: {
     operationId: string;
     accessPath: string;
@@ -158,7 +184,9 @@ export class AccessOperationCleanupService {
       record.accessPid !== null &&
       record.processStartTime !== null
     ) {
-      const liveProcess = await this.options.processInspector.getProcess(record.accessPid);
+      const inspected = await this.inspectProcess(record.accessPid);
+      if (!inspected.ok) return inspected.failure;
+      const liveProcess = inspected.process;
       if (liveProcess !== undefined) {
         const sameProcess =
           liveProcess.name.toUpperCase() === "MSACCESS.EXE" &&
@@ -183,7 +211,9 @@ export class AccessOperationCleanupService {
       );
     }
 
-    const process = await this.options.processInspector.getProcess(record.accessPid);
+    const inspected = await this.inspectProcess(record.accessPid);
+    if (!inspected.ok) return inspected.failure;
+    const process = inspected.process;
     if (process === undefined) {
       // PID is verifiably gone — goal is already met, no need to kill.
       await this.options.registry.update(record.operationId, {
@@ -216,7 +246,11 @@ export class AccessOperationCleanupService {
     }
 
     const commandLine = process.commandLine ?? record.commandLine ?? "";
-    if (commandLine.length > 0 && !pathMatchesAccessPath(commandLine, record.accessPath)) {
+    if (
+      commandLine.length > 0 &&
+      !isAutomationServerCommandLine(commandLine) &&
+      !pathMatchesAccessPath(commandLine, record.accessPath)
+    ) {
       return failureResult(
         createDysflowError(
           "CLEANUP_COMMAND_LINE_MISMATCH",
@@ -337,6 +371,20 @@ export class AccessOperationCleanupService {
  * Null / empty / non-parseable values → returns false (caller falls through to existing null
  * handling without crashing).
  */
+/**
+ * #2017 — an Access started through COM automation (`New-Object -ComObject
+ * Access.Application`, which is how every dysflow runner starts it) has the
+ * command line `MSACCESS.EXE -Embedding`: it names no database, so it cannot
+ * be matched against the registered path. Such a process is never one a person
+ * opened; the PID and start time the runner recorded already identify it.
+ * A command line that names a database is still matched against the path.
+ */
+function isAutomationServerCommandLine(commandLine: string): boolean {
+  // Only the executable plus the automation switch: a line that also names a
+  // database is matched against the registered path instead.
+  return /^\s*(?:"[^"]*msaccess\.exe"|\S*msaccess\.exe)\s+[-/]Embedding\s*$/i.test(commandLine);
+}
+
 export function sameProcessStartTime(
   a: string | null | undefined,
   b: string | null | undefined,

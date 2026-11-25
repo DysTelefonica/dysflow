@@ -1,12 +1,27 @@
 import { logSwallowedIoError } from "../utils/log-swallowed-io-error.js";
 import type { OsProcessInfo } from "./access-operation-cleanup.js";
 
-export const PROCESS_INSPECTOR_TIMEOUT_MS = 5_000;
+export const PROCESS_INSPECTOR_TIMEOUT_MS = 10_000;
 
 const DMTF_PATTERN = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d{6})([+-]\d{3})$/;
 
+/**
+ * #2017 — the probe runs its CIM query inside `Start-Job`, so `CreationDate`
+ * returns through `Receive-Job` as a deserialized DateTime, which
+ * Windows PowerShell 5.1 `ConvertTo-Json` writes as `"\/Date(<ms>)\/"`
+ * (optionally followed by a `+hhmm` offset). `<ms>` is milliseconds since the
+ * Unix epoch in UTC; the offset never changes the instant.
+ */
+const MS_DATE_PATTERN = /^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/;
+
 export function parseCimDateTimeToIso(value: string | null | undefined): string {
   if (value == null || value.length === 0) return "";
+
+  const msDate = MS_DATE_PATTERN.exec(value);
+  if (msDate !== null) {
+    const instant = new Date(Number(msDate[1]));
+    return Number.isNaN(instant.getTime()) ? "" : instant.toISOString();
+  }
 
   const match = DMTF_PATTERN.exec(value);
   if (match === null) {

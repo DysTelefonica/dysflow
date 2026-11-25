@@ -153,6 +153,12 @@ When the SQL runs on another file, the `accessPath` frontend is not opened and i
 
 Evidence: the early read dispatch in `scripts/dysflow-access-runner.ps1` and `scripts/tests/dysflow-access-runner-read-frontend-untouched-1944.Tests.ps1`.
 
+An applied `mode: "write"` on the frontend itself runs through DAO with the frontend password (#2017). It never starts Access.
+
+The frontend startup form, AutoExec and VBA do not run, so a write can repair the local table that breaks that startup.
+
+Evidence: `Invoke-FrontendDirectWrite` in `scripts/dysflow-access-runner.ps1` and `scripts/tests/dysflow-access-runner-frontend-direct-write-2017.Tests.ps1`.
+
 The write gates are unchanged: without `apply: true` a write is a plan, and disabled writes return `MCP_WRITES_DISABLED`.
 
 The project-config write gate still applies. Writing to a production backend remains the caller's responsibility (HR-3).
@@ -203,6 +209,10 @@ Inspection preserves the recorded status and nullable PID. It never reports
 
 Missing IDs return `CLEANUP_OPERATION_NOT_FOUND`; a mismatched database returns
 `CLEANUP_ACCESS_PATH_MISMATCH`.
+
+A failed process probe returns `CLEANUP_INSPECTION_FAILED` and kills nothing (#2017). Retry, or list candidates with `access_force_cleanup_orphaned`.
+
+An Access that dysflow started through COM has the command line `MSACCESS.EXE -Embedding`, which names no database. Its recorded PID and start time identify it instead.
 
 The executable schema accepts these recovery payloads without requiring a
 synthetic root `mode`, `ok`, or `dryRun`.
