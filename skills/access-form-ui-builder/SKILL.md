@@ -6,7 +6,7 @@ metadata:
   author: "gentleman-programming"
   version: "1.5"
   last_updated: "2026-10-26"
-  last_dysflow_version: "4.5.10"
+  last_dysflow_version: "4.5.11"
   requires_dysflow: ">=2.6.0"
 ---
 
