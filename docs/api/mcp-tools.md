@@ -6,6 +6,24 @@ The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteab
 
 [Back to README](../../README.md)
 
+## Large results
+
+A result larger than 16 KiB is published once, in `structuredContent`. Its `content[0].text` becomes a bounded summary (`src/adapters/mcp/response-envelope.ts`).
+
+The summary keeps the field list and adds `summary.projection`, a copy that fits the same 16 KiB (#2020):
+
+- Every scalar and nested object is kept; each list and string is capped.
+- Failing entries come first: `passed: false`, `ok: false`, an `error` string or a failing `status`.
+- `summary.truncated` maps each shortened list path to its full length.
+- `matched`, `diffs` and `runtimeDiagnostics` collapse to a length first.
+
+A client that reads only the text, like the Pi facade, still sees the verdict:
+
+- `verify_code`: `actionableOk`, `summaryStructured`, `recommendedAction` and the `actionableDifferent[]` names.
+- `get_test_run`: `status`, `progress` and `result.passed`/`result.failed`, failing tests first.
+
+Read `structuredContent` for the complete payload.
+
 ## Rejected input
 
 Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error`

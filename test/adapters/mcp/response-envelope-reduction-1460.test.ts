@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
 import {
+  LARGE_RESULT_TEXT_THRESHOLD_BYTES,
   RESULT_SCHEMA_VERSION,
   type ResponseEnvelopeShape,
   withWireResponseEnvelope,
@@ -79,7 +80,11 @@ describe("MCP response envelope reduction (#1460)", () => {
     expect(structured.schemaVersion).toBe(RESULT_SCHEMA_VERSION);
     expect(structured.tools).toHaveLength(80);
     expect(structured.content).toBeUndefined();
-    expect((result.content[0]?.text ?? "").length).toBeLessThan(2_000);
+    // #2020: the fallback now carries a bounded projection, so its bound is the
+    // large-result threshold itself rather than a bare field list.
+    expect(Buffer.byteLength(result.content[0]?.text ?? "", "utf8")).toBeLessThanOrEqual(
+      LARGE_RESULT_TEXT_THRESHOLD_BYTES,
+    );
     expect(result.content[0]?.text).not.toContain("tool_79");
   });
 
@@ -118,7 +123,9 @@ describe("MCP response envelope reduction (#1460)", () => {
     };
     const structured = result.structuredContent;
 
-    expect((result.content[0]?.text ?? "").length).toBeLessThan(2_000);
+    expect(Buffer.byteLength(result.content[0]?.text ?? "", "utf8")).toBeLessThanOrEqual(
+      LARGE_RESULT_TEXT_THRESHOLD_BYTES,
+    );
     expect(structured?.schemaVersion).toBe(RESULT_SCHEMA_VERSION);
     expect(structured?.tools).toHaveLength(80);
   });

@@ -114,6 +114,24 @@ unchanged. This is visible serialized version metadata, not a surface reduction
 or a blanket baseline regeneration. Full capabilities contain two version
 fields; their existing ceiling is not increased.
 
+### Large-result projection: 4.5.11
+
+Issue #2020 adds `summary.projection` to the text fallback of a result larger than 16 KiB.
+
+Before that, the fallback held only the field list. A client that reads the text, like the Pi facade, could not see the verdict.
+
+The projection stays within the same 16 KiB threshold. It changes no logical bytes: the canonical payload in `structuredContent` is unchanged. It adds only text-fallback wire bytes.
+
+The deltas were measured on the same checkout with and without `src/adapters/mcp/response-envelope.ts`. Only these ceilings move:
+
+- `describeTool` wire `2066472` → `2153886` (+87414).
+- `getCapabilities` wire `63318` → `63449` (+131).
+- `getCapabilitiesCompact` wire `50406` → `50537` (+131).
+- `schemaCompact` wire `121715` → `129589` (+7874).
+- `schemaFull` wire `833752` → `841599` (+7847).
+
+Every logical ceiling and every other metric is unchanged. This is not a blanket baseline regeneration.
+
 Do not add a tokenizer estimate as if it were a provider-independent fact.
 
 ## Issue #1461 progressive-discovery evidence

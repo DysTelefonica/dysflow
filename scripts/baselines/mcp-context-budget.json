@@ -17,19 +17,19 @@
     },
     "getCapabilities": {
       "logicalBytes": 62444,
-      "wireBytes": 63318
+      "wireBytes": 63449
     },
     "getCapabilitiesCompact": {
       "logicalBytes": 49702,
-      "wireBytes": 50406
+      "wireBytes": 50537
     },
     "schemaFull": {
       "logicalBytes": 833300,
-      "wireBytes": 833752
+      "wireBytes": 841599
     },
     "schemaCompact": {
       "logicalBytes": 121263,
-      "wireBytes": 121715
+      "wireBytes": 129589
     },
     "schemaIndex": {
       "logicalBytes": 3732,
@@ -37,7 +37,7 @@
     },
     "describeTool": {
       "logicalBytes": 751015,
-      "wireBytes": 2066472
+      "wireBytes": 2153886
     },
     "describeToolSelected": {
       "logicalBytes": 181675,

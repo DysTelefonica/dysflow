@@ -11,9 +11,33 @@ export const RESULT_SCHEMA_VERSION = "dysflow.result/v1" as const;
  * `structuredContent`.
  */
 export const LARGE_RESULT_TEXT_THRESHOLD_BYTES = 16 * 1024;
-const LARGE_RESULT_SUMMARY = "Full result is available in structuredContent.";
+const LARGE_RESULT_SUMMARY =
+  "Full result is available in structuredContent. summary.projection holds a bounded copy of its fields; summary.truncated names each list that was shortened, with its full length.";
 const MAX_SUMMARY_FIELDS = 32;
 const MAX_SUMMARY_FIELD_LENGTH = 96;
+/**
+ * Issue #2020 — a client that reads only the text (the Pi facade) must still
+ * see the verdict. The projection keeps every scalar and nested object, caps
+ * lists and strings, and lists failing entries first. Each stage below is
+ * tighter than the previous one; the first that fits the text threshold wins.
+ */
+const PROJECTION_MAX_DEPTH = 4;
+const PROJECTION_ITEM_FIELDS = 12;
+/** Bulky lists that rarely decide the next step; they collapse to a count first. */
+const PROJECTION_LOW_PRIORITY_KEYS = new Set(["matched", "diffs", "content", "runtimeDiagnostics"]);
+const PROJECTION_STAGES: readonly ProjectionStage[] = [
+  { arrayCap: 50, stringCap: 300, collapseLowPriority: false },
+  { arrayCap: 50, stringCap: 300, collapseLowPriority: true },
+  { arrayCap: 20, stringCap: 200, collapseLowPriority: true },
+  { arrayCap: 5, stringCap: 120, collapseLowPriority: true },
+  { arrayCap: 0, stringCap: 80, collapseLowPriority: true },
+];
+
+type ProjectionStage = {
+  arrayCap: number;
+  stringCap: number;
+  collapseLowPriority: boolean;
+};
 export type ResultSchemaVersion = typeof RESULT_SCHEMA_VERSION;
 
 type TextContent = { type: "text"; text: string };
@@ -117,28 +141,114 @@ function summaryText(
     typeof result.error === "object" && result.error !== null
       ? (result.error as Record<string, unknown>)
       : undefined;
-  return JSON.stringify({
-    schemaVersion: RESULT_SCHEMA_VERSION,
-    isError: result.isError,
-    ...(wireOk(result, payload) === undefined ? {} : { ok: wireOk(result, payload) }),
-    ...(error === undefined
-      ? {}
-      : {
-          error: {
-            ...(typeof error.code === "string" ? { code: error.code } : {}),
-            ...(typeof error.message === "string" ? { message: error.message } : {}),
-          },
-        }),
-    summary: {
-      kind: "structuredContent",
-      fields: Object.keys(payload)
-        .sort()
-        .slice(0, MAX_SUMMARY_FIELDS)
-        .map((field) => field.slice(0, MAX_SUMMARY_FIELD_LENGTH)),
-      fieldCount: Object.keys(payload).length,
-      message: LARGE_RESULT_SUMMARY,
-    },
+  const build = (projected?: {
+    projection: Record<string, unknown>;
+    truncated: Record<string, number>;
+  }) =>
+    JSON.stringify({
+      schemaVersion: RESULT_SCHEMA_VERSION,
+      isError: result.isError,
+      ...(wireOk(result, payload) === undefined ? {} : { ok: wireOk(result, payload) }),
+      ...(error === undefined
+        ? {}
+        : {
+            error: {
+              ...(typeof error.code === "string" ? { code: error.code } : {}),
+              ...(typeof error.message === "string" ? { message: error.message } : {}),
+            },
+          }),
+      summary: {
+        kind: "structuredContent",
+        fields: Object.keys(payload)
+          .sort()
+          .slice(0, MAX_SUMMARY_FIELDS)
+          .map((field) => field.slice(0, MAX_SUMMARY_FIELD_LENGTH)),
+        fieldCount: Object.keys(payload).length,
+        message: LARGE_RESULT_SUMMARY,
+        ...(projected === undefined
+          ? {}
+          : {
+              projection: projected.projection,
+              ...(Object.keys(projected.truncated).length === 0
+                ? {}
+                : { truncated: projected.truncated }),
+            }),
+      },
+    });
+  for (const stage of PROJECTION_STAGES) {
+    const truncated: Record<string, number> = {};
+    const projection = projectObject(payload, stage, 0, "", truncated);
+    const text = build({ projection, truncated });
+    if (byteLength(text) <= LARGE_RESULT_TEXT_THRESHOLD_BYTES) return text;
+  }
+  return build();
+}
+
+function projectObject(
+  value: Record<string, unknown>,
+  stage: ProjectionStage,
+  depth: number,
+  path: string,
+  truncated: Record<string, number>,
+): Record<string, unknown> {
+  const projected: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    const childPath = path === "" ? key : `${path}.${key}`;
+    if (Array.isArray(child)) {
+      if (depth === 0 && stage.collapseLowPriority && PROJECTION_LOW_PRIORITY_KEYS.has(key)) {
+        truncated[childPath] = child.length;
+        continue;
+      }
+      projected[key] = projectArray(child, stage, childPath, truncated);
+      continue;
+    }
+    if (isPlainObject(child)) {
+      if (depth + 1 >= PROJECTION_MAX_DEPTH) continue;
+      projected[key] = projectObject(child, stage, depth + 1, childPath, truncated);
+      continue;
+    }
+    projected[key] = projectScalar(child, stage.stringCap);
+  }
+  return projected;
+}
+
+function projectArray(
+  items: readonly unknown[],
+  stage: ProjectionStage,
+  path: string,
+  truncated: Record<string, number>,
+): unknown[] {
+  if (items.length > stage.arrayCap) truncated[path] = items.length;
+  const ordered = [...items].sort((left, right) => failureRank(left) - failureRank(right));
+  return ordered.slice(0, stage.arrayCap).map((item) => {
+    if (!isPlainObject(item)) return projectScalar(item, stage.stringCap);
+    const entry: Record<string, unknown> = {};
+    for (const [key, field] of Object.entries(item)) {
+      if (Object.keys(entry).length >= PROJECTION_ITEM_FIELDS) break;
+      if (Array.isArray(field) || isPlainObject(field)) continue;
+      entry[key] = projectScalar(field, stage.stringCap);
+    }
+    return entry;
   });
+}
+
+/** 0 for an entry that reports a failure, so failing tests and modules are listed first. */
+function failureRank(item: unknown): number {
+  if (!isPlainObject(item)) return 1;
+  if (item.passed === false || item.ok === false || typeof item.error === "string") return 0;
+  return typeof item.status === "string" && /fail|error|crash/i.test(item.status) ? 0 : 1;
+}
+
+function projectScalar(value: unknown, stringCap: number): unknown {
+  if (typeof value === "string") {
+    return value.length > stringCap ? `${value.slice(0, stringCap)}…` : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || value === null) return value;
+  return undefined;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function byteLength(value: string): number {
