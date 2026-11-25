@@ -6,6 +6,24 @@ The transport strategy lives in [MCP protocol](../mcp-protocol.md). Copy-pasteab
 
 [Back to README](../../README.md)
 
+## Large results
+
+A result larger than 16 KiB is published once, in `structuredContent`. Its `content[0].text` becomes a bounded summary (`src/adapters/mcp/response-envelope.ts`).
+
+The summary keeps the field list and adds `summary.projection`, a copy that fits the same 16 KiB (#2020):
+
+- Every scalar and nested object is kept; each list and string is capped.
+- Failing entries come first: `passed: false`, `ok: false`, an `error` string or a failing `status`.
+- `summary.truncated` maps each shortened list path to its full length.
+- `matched`, `diffs` and `runtimeDiagnostics` collapse to a length first.
+
+A client that reads only the text, like the Pi facade, still sees the verdict:
+
+- `verify_code`: `actionableOk`, `summaryStructured`, `recommendedAction` and the `actionableDifferent[]` names.
+- `get_test_run`: `status`, `progress` and `result.passed`/`result.failed`, failing tests first.
+
+Read `structuredContent` for the complete payload.
+
 ## Rejected input
 
 Every schema rejection returns `MCP_INPUT_INVALID` with a structured `error`
@@ -135,6 +153,12 @@ When the SQL runs on another file, the `accessPath` frontend is not opened and i
 
 Evidence: the early read dispatch in `scripts/dysflow-access-runner.ps1` and `scripts/tests/dysflow-access-runner-read-frontend-untouched-1944.Tests.ps1`.
 
+An applied `mode: "write"` on the frontend itself runs through DAO with the frontend password (#2017). It never starts Access.
+
+The frontend startup form, AutoExec and VBA do not run, so a write can repair the local table that breaks that startup.
+
+Evidence: `Invoke-FrontendDirectWrite` in `scripts/dysflow-access-runner.ps1` and `scripts/tests/dysflow-access-runner-frontend-direct-write-2017.Tests.ps1`.
+
 The write gates are unchanged: without `apply: true` a write is a plan, and disabled writes return `MCP_WRITES_DISABLED`.
 
 The project-config write gate still applies. Writing to a production backend remains the caller's responsibility (HR-3).
@@ -185,6 +209,10 @@ Inspection preserves the recorded status and nullable PID. It never reports
 
 Missing IDs return `CLEANUP_OPERATION_NOT_FOUND`; a mismatched database returns
 `CLEANUP_ACCESS_PATH_MISMATCH`.
+
+A failed process probe returns `CLEANUP_INSPECTION_FAILED` and kills nothing (#2017). Retry, or list candidates with `access_force_cleanup_orphaned`.
+
+An Access that dysflow started through COM has the command line `MSACCESS.EXE -Embedding`, which names no database. Its recorded PID and start time identify it instead.
 
 The executable schema accepts these recovery payloads without requiring a
 synthetic root `mode`, `ok`, or `dryRun`.
@@ -587,7 +615,7 @@ Invocation entries identify the exact MCP tool, while the legacy operation ledge
     - **Incompatible with `filter`.** A filtered export only lists the matching modules, so pruning would delete every other on-disk file — this combination is rejected with `INVALID_INPUT`.
     - **Saved queries are never pruned.** Only the managed module/class/form/report folders are scanned.
     - **A file that cannot be deleted is reported, not thrown.** A locked file (Access or an editor holding a handle) rejects with `EPERM`/`EBUSY`; `force:true` suppresses only `ENOENT`. Such an entry is recorded under `prune.failed` as `{ path, message }` and the sweep continues, so `prune.deleted` stays a complete record of what was actually removed. `prune.failed` is `[]` on a clean sweep; a non-empty `failed` alongside `applied: true` means the destination does not yet fully mirror the binary — release whatever holds the listed paths and re-run.
-* **`import_modules`**: Import VBA source modules from disk. Before a real import, each module is linted with the default rules (#1863): `apply:true` is refused with `LINT_FINDINGS_ERROR` only for a new error-severity finding; a finding the committed version already had is reported as an inherited warning. `apply:false` lists every finding, marked new or inherited.
+* **`import_modules`**: Import VBA source modules from disk. Before a real import, each module is linted with the default rules (#1863): `apply:true` is refused with `LINT_FINDINGS_ERROR` only for a new error-severity finding; a finding the committed version already had is reported as an inherited warning. `apply:false` lists every finding, marked new or inherited. A form whose `CodeBehindForm` copy differs from its `.cls` is refused on `apply:true` with `FORM_CODE_BEHIND_DIVERGES` (#1865); the `apply:false` plan names that refusal in `wouldRefuse[]` (`code`, `requiredFlags: ["acknowledgeCodeBehindWins"]`, `files`, `remediation`), apart from the lint warnings (#2018). `wouldRefuse` is empty when the call already passes the flag.
   - Parameters: `moduleNames` (array, optional), `importMode` (string, optional), `dryRun` (boolean, optional), `verbose` (boolean, optional), `timeoutMs` (number, optional), `strictContext` (boolean, optional)
   - Dry-run (`dryRun:true` or `apply:false`) classifies each planned module against the binary with the verify_code comparison: `moduleClassifications[]` with `{ module, classification, actionable, recommendation }`, where `classification` is `sourceNewer`, `binaryNewer`, `bothChanged`, `matched`, `missingInBinary` or `missingInSource`. A `binaryNewer` or `bothChanged` module adds a warning, because an import would overwrite binary-only changes. The dry-run reads the binary through a read-only Export of a database copy and never writes Access; if the comparison fails, the plan keeps its module list and adds a warning instead.
   - Applied imports preserve caller order in the terminal `DYSFLOW_RESULT`. Multi-module calls retry only failed names after a pass that made progress; a single-module failure or a no-progress pass is terminal. Terminal failures keep top-level `VBA_IMPORT_FAILED` plus typed per-module phase, rollback, lock-owner, fallback, and remediation evidence.
@@ -686,7 +714,7 @@ Each differing module is assigned one `classification`:
 | `whitespaceOnly` | Only line endings (CRLF/LF), trailing whitespace, trailing blank lines, or leading indentation. Indentation is folded for code modules (`.bas`/`.cls`/`.frm`) only; structural indentation in a `.form.txt`/`.report.txt` still reaches the functional diff | No |
 | `attributeOnly` | Only module/class header boilerplate differs — `Attribute VB_*` lines (in code modules and a form's embedded `CodeBehindForm`) or the `VERSION x.x CLASS` + `BEGIN…END` instancing block that an Access export may emit on one side only. `VB_Name` is functional whenever the two sides disagree — a real rename (both name it, values differ) OR one side omitting it entirely (a dropped-identity import defect, #646); non-functional only when both sides carry the same name or both omit it | No |
 | `caseOnly` | Only identifier/keyword casing differs (`Me.Name` vs `Me.name`). VBA is case-insensitive and the VBE re-cases identifiers project-wide on import. String-literal and comment bodies are compared **case-sensitively**, so a runtime-visible text change is NOT absorbed here. A pair that differs only in indentation is reported as `whitespaceOnly`, never as `caseOnly` (#1669) | No |
-| `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`), **or** a toggle property uses an equivalent serialization (`Visible =0` ≡ `Visible = NotDefault`). Access only writes a property when it differs from its default, so a written toggle value is always the same non-default — only the `NotDefault`/`0`/`-1` representation varies. A real change shows up as a line being present vs absent, which stays functional | No |
+| `formSerializationOnly` | Only `.form.txt` serialization metadata differs (`Checksum`, `PrtDevMode*`, `PrtDevNames*`, `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`, `NameMap`, a `GUID` identity blob (#2019)), **or** a toggle property uses an equivalent serialization (`Visible =0` ≡ `Visible = NotDefault`). Access only writes a property when it differs from its default, so a written toggle value is always the same non-default — only the `NotDefault`/`0`/`-1` representation varies. A real change shows up as a line being present vs absent, which stays functional | No |
 | `encodingOnly` | Difference disappears after normalizing encoding/mojibake artifacts — a leading BOM or its mojibake remnant (`?Attribute VB_Name…`, U+FEFF, U+FFFD) on one side only, or lossy out-of-codepage glyphs that Access export replaced with `?` (e.g. `►` → `?`). Lossy/case normalization is applied **outside string literals only**, so a glyph or casing change inside a quoted string stays functional | No |
 | `commentOnly` | Only whole-line `'` or `Rem` comment body differs (case, content, or both). The VBE never reads comment bodies at runtime, so a comment-only reflow or content update is non-functional. String literals are untouched by this normalization | No |
 | `continuationOnly` | Only VBA line-continuation reflow differs (`<spaces>_<EOL>` joining the next physical line). Source splitting an expression across two physical lines and binary keeping it on one is non-functional under the VBA grammar | No |
@@ -852,7 +880,7 @@ Empty or whitespace-only names and either bracket character are rejected before 
   - Parameters: `catalogPath` (string, optional), `filter` (string, optional)
 * **`inspect_form`**: Parse a version-controlled `.form.txt` (SaveAsText format) and return its control tree and form-level events as structured JSON. Works offline — Access is not required. Read-only.
   - Parameters: `sourcePath` (string, path to the `.form.txt` file), `path` (string, alias for `sourcePath`)
-* **`compare_form`**: Compare two version-controlled `.form.txt` files and return a structured drift report (added/removed controls, changed properties, layout-bound changes), each classified as actionable or noise against the FORM_NOISE_KEYS floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap). Works offline — Access is not required. Read-only.
+* **`compare_form`**: Compare two version-controlled `.form.txt` files and return a structured drift report (added/removed controls, changed properties, layout-bound changes), each classified as actionable or noise against the FORM_NOISE_KEYS floor (Checksum, PrtDevMode*, PrtDevNames*, PrtMip, RecSrcDt, LayoutCached*, PublishOption, NoSaveCTIWhenDisabled, NameMap, GUID). Works offline — Access is not required. Read-only.
   - Parameters: `sourcePath`/`path` (string, left `.form.txt` file), `targetPath` (string, right `.form.txt` file). The legacy `target` path alias remains accepted for compatibility, but is deprecated; role-shaped values (`frontend`, `backend`, `auto`) are rejected with guidance to use `targetPath`.
 * **`lint_form_code`**: Static-analyze a form/report `.cls` against its parsed `.form.txt` without opening Access.
   - Parameters: `formName` or `moduleNames` (optional), `rules` (array, optional), `strict` (boolean, optional), `destinationRoot`/`sourceRoot` (optional overrides; without them the source root comes from `projectId` or from the project at `cwd`, #1992)

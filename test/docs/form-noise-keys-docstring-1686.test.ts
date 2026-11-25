@@ -83,12 +83,11 @@ describe("stripFormSerializationNoise docstring contract (#1686)", () => {
     }
   });
 
-  it("keeps GUID documented as retained, matching the live normalizer", async () => {
-    const source = await readFile(CLASSIFIER_PATH, "utf8");
-    const retains = readDocSection(readStripDocstring(source), "Retains");
+  it("documents why GUID joined the noise floor (#2019)", async () => {
+    const source = await readFile(`src/core/services/${SHARED_SET_MODULE}.ts`, "utf8");
 
-    expect(FORM_NOISE_KEYS.has("GUID")).toBe(false);
-    expect(retains).toContain("GUID");
+    expect(FORM_NOISE_KEYS.has("GUID")).toBe(true);
+    expect(source).toMatch(/- `GUID` —[\s\S]*#2019/);
   });
 });
 
@@ -120,11 +119,14 @@ describe("stripFormSerializationNoise runtime behavior (#1686)", () => {
     }
   });
 
-  it("retains GUID — it is functional and must never join the noise floor", () => {
-    const withGuid = wrap("    GUID = Begin\n        0xc4073da1\n    End\n");
+  it("strips a control GUID block but keeps the control identity lines (#2019)", () => {
+    const withGuid = wrap(
+      '    Begin CommandButton\n        Name ="cmdSalir"\n        GUID = Begin\n            0xc4073da1\n        End\n    End\n',
+    );
+    const stripped = stripFormSerializationNoise(withGuid, "form.txt");
 
-    expect(stripFormSerializationNoise(withGuid, "form.txt")).toContain("GUID");
-    expect(stripFormSerializationNoise(withGuid, "form.txt")).toContain("0xc4073da1");
+    expect(stripped).not.toContain("0xc4073da1");
+    expect(stripped).toContain('Name ="cmdSalir"');
   });
 
   it("retains unknown Begin..End keys — bias-to-functional", () => {

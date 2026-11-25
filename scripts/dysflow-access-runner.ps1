@@ -328,6 +328,59 @@ function Resolve-QueryActionTargetPath {
   return $targetPath
 }
 
+function Test-IsSameDatabasePath {
+  param([string] $Left, [string] $Right)
+  if ([string]::IsNullOrWhiteSpace($Left) -or [string]::IsNullOrWhiteSpace($Right)) { return $false }
+  try {
+    $leftFull = [System.IO.Path]::GetFullPath($Left)
+    $rightFull = [System.IO.Path]::GetFullPath($Right)
+  } catch {
+    return $false
+  }
+  return [string]::Equals($leftFull, $rightFull, [System.StringComparison]::OrdinalIgnoreCase)
+}
+
+# #2017 — an applied query_execute write on the frontend runs through a DAO
+# engine created in this process, with the FRONTEND password. It never starts
+# Access.Application: a frontend whose own startup blocks on a modal dialog
+# cannot leave a hidden MSACCESS.EXE behind, and the write is the way to repair
+# the local table that breaks that startup. DAO never runs the startup form,
+# AutoExec or VBA, so no startup suppression is needed either.
+function Invoke-FrontendDirectWrite {
+  param(
+    [Parameter(Mandatory = $true)] $Payload,
+    [Parameter(Mandatory = $false)] [string] $Action,
+    [Parameter(Mandatory = $true)] [string] $DatabasePath
+  )
+  $directAction = $Action
+  if ([string]::IsNullOrWhiteSpace($directAction) -and $Payload.mode -eq 'write') { $directAction = 'exec_sql' }
+  $dbEngine = $null
+  $directDb = $null
+  $runScriptContext = $null
+  try {
+    $dbEngine = New-DaoDbEngine
+    Write-DysflowProgress -Percent 10 -Message "Opening database"
+    if ($directAction -eq 'run_script') {
+      $runScriptContext = Open-RunScriptTransactionContext -DbEngine $dbEngine -DatabasePath $DatabasePath -Password $AccessPassword
+      $result = Invoke-WriteAction -Database $runScriptContext.Database -Action $directAction -Payload $Payload -TransactionWorkspace $runScriptContext.Workspace
+    } else {
+      $directDb = Open-DatabaseWithPassword -DbEngine $dbEngine -DatabasePath $DatabasePath -Password $AccessPassword
+      $result = Invoke-WriteAction -Database $directDb -Action $directAction -Payload $Payload
+    }
+    Write-DysflowProgress -Percent 90 -Message "Finalizing"
+    Write-DysflowResult -Result $result -Depth 20
+  } finally {
+    Close-RunScriptTransactionContext -Context $runScriptContext
+    if ($null -ne $directDb) {
+      try { $directDb.Close() } catch { Write-Debug "Diagnostics: $_" }
+      try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($directDb) } catch { Write-Debug "Diagnostics: $_" }
+    }
+    if ($null -ne $dbEngine) { try { [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($dbEngine) } catch { Write-Debug "Diagnostics: $_" } }
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+  }
+}
+
 function ConvertTo-IsoStartTime {
   param($CreationDate)
   if ($null -eq $CreationDate) { return $null }
@@ -1897,6 +1950,14 @@ try {
     $result = Compact-RepairDatabase -Payload $payload -AccessDbPath $AccessDbPath
     Write-DysflowProgress -Percent 90 -Message "Finalizing"
     Write-DysflowResult -Result $result -Depth 20
+    $script:exitCode = 0; return
+  }
+
+  # #2017 — an applied write whose target is the frontend itself never needs
+  # Access.Application (see Invoke-FrontendDirectWrite). Backend direct writes
+  # keep the path below unchanged.
+  if ($isDirectTargetQuery -and (Test-IsSameDatabasePath -Left $targetPath -Right $AccessDbPath)) {
+    Invoke-FrontendDirectWrite -Payload $payload -Action $action -DatabasePath $targetPath
     $script:exitCode = 0; return
   }
 

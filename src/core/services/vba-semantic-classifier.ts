@@ -24,7 +24,7 @@ export type VbaComparisonMode = "semantic" | "strict";
  * classification — distinct from the package version. BUMP THIS whenever the
  * classification rules change (new category, new normalizer, changed precedence).
  */
-export const SEMANTIC_CLASSIFIER_RULES = "2026-11-16.r10-ordered-diff-edges";
+export const SEMANTIC_CLASSIFIER_RULES = "2026-11-25.r11-guid-blob-noise";
 
 export type VbaSemanticCategory =
   | "matched" // identical after no/normalization
@@ -527,7 +527,6 @@ export function stripModuleHeader(text: string): string {
  *   and the `Key = Begin .. End` block.
  *
  * Retains:
- * - GUID (functional)
  * - Everything else
  * - Any unknown Begin..End key (bias-to-functional)
  *

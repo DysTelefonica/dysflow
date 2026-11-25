@@ -70,6 +70,7 @@ describe("compareForms (form-IR-domain drift classifier)", () => {
       "PublishOption",
       "NoSaveCTIWhenDisabled",
       "NameMap",
+      "GUID",
     ];
     for (const key of expected) {
       expect(FORM_NOISE_KEYS.has(key), `FORM_NOISE_KEYS must contain "${key}"`).toBe(true);

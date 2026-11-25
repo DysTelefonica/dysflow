@@ -161,6 +161,47 @@ End`;
     expect(result.classification).toBe("formSerializationOnly");
   });
 
+  // #2019 — Access regenerates control and form GUIDs; a GUID-only delta is
+  // identity bookkeeping, not behavior.
+  const guidForm = (guid: string, caption: string) => `Version =21
+Begin Form
+    GUID = Begin
+        0x0975cd262c3d5949ade9403b83522ec0
+    End
+    Begin
+        Begin CommandButton
+            Name ="cmdSalir"
+            GUID = Begin
+                ${guid}
+            End
+            Caption ="${caption}"
+        End
+    End
+End`;
+
+  it("treats a GUID-only control delta as form serialization noise (#2019)", () => {
+    const result = classifyVbaPair({
+      sourceText: guidForm("0x0975cd262c3d5949ade9403b83522ec0", "Salir"),
+      binaryText: guidForm("0xfb479fa3d3489445ad90f363297327d7", "Salir"),
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(false);
+    expect(result.classification).toBe("formSerializationOnly");
+  });
+
+  it("keeps a real property change actionable next to a GUID delta (#2019)", () => {
+    const result = classifyVbaPair({
+      sourceText: guidForm("0x0975cd262c3d5949ade9403b83522ec0", "Salir"),
+      binaryText: guidForm("0xfb479fa3d3489445ad90f363297327d7", "Cerrar"),
+      fileType: "form.txt",
+      mode: "semantic",
+    });
+
+    expect(result.actionable).toBe(true);
+  });
+
   it("treats explicit enumSiNo.Sí optional default argument as equivalent to omission", () => {
     const sourceText = `Option Compare Database
 Option Explicit

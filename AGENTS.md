@@ -181,8 +181,10 @@ The `.form.txt` `CodeBehindForm` section is the same code serialized a second wa
 Never compare form code-behind through the `.form.txt` — it double-counts and re-imports the serialization noise the `.cls` already owns.
 
 - **Form serialization noise is an allow-list** (`Checksum`, `PrtDevMode*`, `PrtDevNames*`,
-  `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`). `GUID` is
-  functional — do not strip it. Unknown keys are retained (functional).
+  `PrtMip`, `RecSrcDt`, `LayoutCached*`, `PublishOption`, `NoSaveCTIWhenDisabled`, `NameMap`,
+  `GUID`). Unknown keys are retained (functional).
+- **A GUID-only delta is noise (#2019).** Access regenerates the GUID of a form or control.
+  A changed control still differs through its own Name/property lines.
 - **Toggle-property serialization is equivalent**: `Visible =0` ≡ `Visible = NotDefault` ≡
 `Visible =-1`. Access only serializes a non-default value, so the written value is always the same and only its `NotDefault`/`0`/`-1` representation varies.
 

@@ -14,6 +14,18 @@ export type ImportPlanModuleClassification = {
   recommendation: string;
 };
 
+/**
+ * Issue #2018 — a refusal the same call would hit with apply:true. A warning
+ * alone does not tell the caller that apply:true will fail; this names the
+ * error code, the flag that lifts it and the files involved.
+ */
+export type ImportPlanRefusal = {
+  code: string;
+  requiredFlags: readonly string[];
+  files: readonly string[];
+  remediation: string;
+};
+
 export type ImportPlanResult = {
   operation: "import_all" | "import_modules";
   dryRun: true;
@@ -30,6 +42,8 @@ export type ImportPlanResult = {
   modulesPlanned: readonly string[];
   modulesCount: number;
   moduleClassifications?: readonly ImportPlanModuleClassification[];
+  /** Refusals apply:true would hit (#2018). Empty when apply:true would proceed past them. */
+  wouldRefuse: readonly ImportPlanRefusal[];
   warnings: readonly string[];
   errors: readonly string[];
 };
@@ -48,13 +62,22 @@ export type BuildImportPlanResultOptions = {
   target: ImportPlanTarget;
   modulesPlanned: readonly string[];
   moduleClassifications?: readonly ImportPlanModuleClassification[];
+  wouldRefuse?: readonly ImportPlanRefusal[];
   warnings: readonly string[];
   errors: readonly string[];
 };
 
 export function buildImportPlanResult(options: BuildImportPlanResultOptions): ImportPlanResult {
-  const { toolName, params, target, modulesPlanned, warnings, errors, moduleClassifications } =
-    options;
+  const {
+    toolName,
+    params,
+    target,
+    modulesPlanned,
+    warnings,
+    errors,
+    moduleClassifications,
+    wouldRefuse = [],
+  } = options;
   return {
     operation: toolName,
     dryRun: true,
@@ -72,6 +95,7 @@ export function buildImportPlanResult(options: BuildImportPlanResultOptions): Im
     modulesPlanned,
     modulesCount: modulesPlanned.length,
     ...(moduleClassifications === undefined ? {} : { moduleClassifications }),
+    wouldRefuse,
     warnings,
     errors,
   };

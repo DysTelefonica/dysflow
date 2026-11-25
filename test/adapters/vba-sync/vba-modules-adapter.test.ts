@@ -83,6 +83,7 @@ describe("VbaModulesAdapter", () => {
       importMode: "Code",
       modulesPlanned: ["Entorno", "Variables Globales"],
       modulesCount: 2,
+      wouldRefuse: [],
       warnings: ["preview warning"],
       errors: [],
     });
@@ -118,6 +119,7 @@ describe("VbaModulesAdapter", () => {
       importMode: undefined,
       modulesPlanned: [],
       modulesCount: 0,
+      wouldRefuse: [],
       warnings: [],
       errors: ["destinationRoot not found: C:/repo/src"],
     });

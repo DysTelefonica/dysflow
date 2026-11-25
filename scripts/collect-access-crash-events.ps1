@@ -124,7 +124,9 @@ function Export-AccessCrashEvents {
 
     $events = @()
     try {
-        $events = @(Get-WinEvent -FilterHashtable @{ LogName = "Application"; Id = $EventId; StartTime = $sinceInstant } -MaxEvents $MaxEvents -ErrorAction Stop)
+        # #1918: Get-WinEvent reads StartTime as local time, so a UTC instant opened
+        # the window early by the UTC offset. Pass local time and filter again below.
+        $events = @(Get-WinEvent -FilterHashtable @{ LogName = "Application"; Id = $EventId; StartTime = $sinceInstant.ToLocalTime() } -MaxEvents $MaxEvents -ErrorAction Stop)
     } catch {
         # An empty or unreadable log is not a failure of this diagnostic: report it
         # and leave a header-only artifact rather than failing the whole workflow.
@@ -133,6 +135,7 @@ function Export-AccessCrashEvents {
 
     $lines = New-Object System.Collections.Generic.List[string]
     foreach ($event in $events) {
+        if ($null -ne $event.TimeCreated -and $event.TimeCreated.ToUniversalTime() -lt $sinceInstant) { continue }
         $normalized = $null
         try {
             [xml]$eventXml = $event.ToXml()

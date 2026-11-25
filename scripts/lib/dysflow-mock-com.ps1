@@ -9,10 +9,17 @@
 # DYSFLOW_MOCK_SIMULATE_WRITES is '1', an open that is not read-only appends a
 # byte to the opened file, modelling an engine that may write a database it
 # holds read-write. Both are unset by default, so existing callers see no change.
+# Issue #2017 — when DYSFLOW_MOCK_CONNECT_LOG names a file, every DAO open also
+# appends `<path>|<connect>` so a test can see which password reached which
+# database. A spawned mock Access.Application is recorded in the open log as
+# `access-spawn|False|`, so a test can see that Access was started at all.
 function Register-MockDatabaseOpen {
-    param([string]$Kind, [string]$DatabasePath, [bool]$ReadOnly)
+    param([string]$Kind, [string]$DatabasePath, [bool]$ReadOnly, [string]$Connect = $null)
     if (-not [string]::IsNullOrWhiteSpace($env:DYSFLOW_MOCK_OPEN_LOG)) {
         Add-Content -LiteralPath $env:DYSFLOW_MOCK_OPEN_LOG -Value "$Kind|$ReadOnly|$DatabasePath" -Encoding UTF8
+    }
+    if ($Kind -eq 'dao' -and -not [string]::IsNullOrWhiteSpace($env:DYSFLOW_MOCK_CONNECT_LOG)) {
+        Add-Content -LiteralPath $env:DYSFLOW_MOCK_CONNECT_LOG -Value "$DatabasePath|$Connect" -Encoding UTF8
     }
     if ($env:DYSFLOW_MOCK_SIMULATE_WRITES -eq '1' -and -not $ReadOnly -and (Test-Path -LiteralPath $DatabasePath -PathType Leaf)) {
         $stream = [System.IO.File]::Open($DatabasePath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write)
@@ -21,6 +28,9 @@ function Register-MockDatabaseOpen {
 }
 
 function Get-MockAccessApplication {
+    if (-not [string]::IsNullOrWhiteSpace($env:DYSFLOW_MOCK_OPEN_LOG)) {
+        Add-Content -LiteralPath $env:DYSFLOW_MOCK_OPEN_LOG -Value "access-spawn|False|" -Encoding UTF8
+    }
     $mockDoCmd = [PSCustomObject]@{ }
     $mockDoCmd | Add-Member -MemberType ScriptMethod -Name SetWarnings -Value { param($val) }
 
@@ -34,6 +44,7 @@ function Get-MockAccessApplication {
         DoCmd                      = $mockDoCmd
         Vbe                        = $mockVbe
         VbProject                  = $mockVbProject
+        DBEngine                   = (Get-MockDaoDbEngine)
     }
 
     # A real Access.Application exposes hWndAccessApp as a method, not a property.
@@ -52,7 +63,7 @@ function Get-MockDaoDbEngine {
     $mockEngine = [PSCustomObject]@{ }
     $mockEngine | Add-Member -MemberType ScriptMethod -Name OpenDatabase -Value {
         param([string]$DatabasePath, [bool]$options, [bool]$readOnly, [string]$connect)
-        Register-MockDatabaseOpen -Kind 'dao' -DatabasePath $DatabasePath -ReadOnly $readOnly
+        Register-MockDatabaseOpen -Kind 'dao' -DatabasePath $DatabasePath -ReadOnly $readOnly -Connect $connect
         return Get-MockDatabase -DatabasePath $DatabasePath
     }
     $mockEngine | Add-Member -MemberType ScriptMethod -Name CompactDatabase -Value {

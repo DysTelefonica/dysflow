@@ -157,6 +157,40 @@ Describe "collect-access-crash-events (#1918)" {
             $lines[1] | Should -Not -Match 'EXCEL'
         }
 
+        # Get-WinEvent reads a FilterHashtable StartTime as local time, so a UTC
+        # instant opened the window early by the machine's UTC offset (one hour on
+        # the self-hosted runner). Only events created at or after SinceUtc count.
+        It "exports only events created at or after SinceUtc" {
+            $since = [datetime]::Parse("2026-10-26T12:00:00Z", [cultureinfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind).ToUniversalTime()
+            $script:CrashEventTimes = @($since.AddMinutes(-30).ToLocalTime(), $since.AddMinutes(30).ToLocalTime())
+            function script:Get-WinEvent {
+                param($FilterHashtable, $MaxEvents, $ErrorAction)
+                $index = 0
+                foreach ($time in $script:CrashEventTimes) {
+                    $index++
+                    $crash = [pscustomobject]@{ Pid = $index }
+                    $crash | Add-Member -MemberType ScriptMethod -Name ToXml -Value {
+                        @"
+<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
+  <EventData>
+    <Data Name="AppName">MSACCESS.EXE</Data>
+    <Data Name="ProcessId">0x$($this.Pid)</Data>
+  </EventData>
+</Event>
+"@
+                    }
+                    $crash | Add-Member -MemberType NoteProperty -Name TimeCreated -Value $time
+                    $crash
+                }
+            }
+
+            $exported = Export-AccessCrashEvents -SinceUtc "2026-10-26T12:00:00Z" -OutputPath $script:OutputPath
+
+            $exported | Should -Be 1
+            $lines = @(Get-Content -LiteralPath $script:OutputPath)
+            $lines[1] | Should -Match ' pid=2 '
+        }
+
         It "leaves a header-only artifact when the event log cannot be read" {
             function script:Get-WinEvent {
                 param($FilterHashtable, $MaxEvents, $ErrorAction)

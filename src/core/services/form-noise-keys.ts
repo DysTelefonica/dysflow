@@ -23,9 +23,12 @@
  * - `NameMap` — binary name table Access omits/recreates between exports;
  *   real control/name changes still survive through the property/control
  *   lines themselves.
+ * - `GUID` — object identity blob Access assigns to the form and to each
+ *   control and regenerates when it recreates one (#2019). A GUID delta never
+ *   changes runtime behavior; an added, removed or edited control still differs
+ *   through its own Name/property lines, so only a GUID-only delta folds.
  *
  * Anything not in this list is preserved by the diff (bias-to-functional).
- * GUID is FUNCTIONAL and must NOT be added here.
  *
  * ## Invariants (LOCKED)
  *
@@ -59,4 +62,5 @@ export const FORM_NOISE_KEYS: ReadonlySet<string> = new Set([
   "PublishOption",
   "NoSaveCTIWhenDisabled",
   "NameMap",
+  "GUID",
 ]);
