@@ -36,7 +36,7 @@ import { canonicalizeVbaText, type SemanticClassification } from "./vba-semantic
  * is ignored, so two different normal forms are never compared. BUMP THIS when
  * `canonicalizeVbaText` changes.
  */
-export const VERIFY_BASE_CANON = "verify-base-canon/v2";
+export const VERIFY_BASE_CANON = "verify-base-canon/v3";
 
 /** Detail attached to every base-resolved entry and to its sync_binary skip. */
 export const BASE_RESOLVED_DETAIL =
