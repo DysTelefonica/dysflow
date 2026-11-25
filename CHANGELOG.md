@@ -1,5 +1,22 @@
 # Changelog
 
+## [v4.5.11] - 2026-11-25
+
+### Changes
+
+- docs(odd): track the 4.5.11 issue queue and its evidence
+- fix(diagnostics): open the crash-event window at SinceUtc, not an hour early (#1918)
+- fix(runner): repair a frontend through DAO and let cleanup kill its Access (#2017)
+- fix(import): name the apply:true refusal in the import dry-run plan (#2018)
+- fix(verify): fold GUID-only form deltas into formSerializationOnly (#2019)
+- fix(mcp): show a bounded projection in the large-result text fallback (#2020)
+- docs(release): use supported command fence language
+- fix(release): align versioned note paths with documentation rules
+- fix(release): document and validate notes checker arguments
+- fix(release): publish complete reader-oriented release notes
+
+
+
 ## [v4.5.10] - 2026-11-17
 
 ### Changes
