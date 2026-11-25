@@ -26,7 +26,7 @@ Copy the call, then fill the `<...>` values. Pass `cwd`, the worktree root, to e
 | --- | --- |
 | Bootstrap the session | `bootstrap({cwd})`, then `schema({view:"index"})` |
 | Check source against binary | `verify_code({cwd})`; decide on `actionableOk`, `bulkImportable`, `bulkExportable` |
-| Plan an import of changed modules | `import_modules({cwd, moduleNames:["<Module>"], apply:false})`; then the same call with `apply:true` |
+| Plan an import of changed modules | `import_modules({cwd, moduleNames:["<Module>"], apply:false})`; then the same call with `apply:true`, adding `acknowledgeCodeBehindWins:true` when `wouldRefuse` names `FORM_CODE_BEHIND_DIVERGES` (a form edited only in its `.cls`) |
 | Export a module into the project source | `export_modules({cwd, moduleNames:["<Module>"], destinationRoot:"<worktree>/src", mutateBinary:false, apply:true})` |
 | Export a module to a folder outside the project | `export_modules({cwd, moduleNames:["<Module>"], exportPath:"<folder>", mutateBinary:false, apply:true})` |
 | Validate a test manifest | `validate_manifest({cwd, testsPath:"tests/tests.vba.json"})` |

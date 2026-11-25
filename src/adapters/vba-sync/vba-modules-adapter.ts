@@ -415,6 +415,9 @@ const COMBOBOX_LISTBOX_NAMES: readonly string[] = [
   "ListWidth",
 ];
 
+const CODE_BEHIND_DIVERGES_REMEDIATION =
+  "Move the edit into the .cls (the single source of code), or re-run with acknowledgeCodeBehindWins:true to let the .cls win.";
+
 /** Issue #1865 — one-line description of a code-behind divergence. */
 function formatCodeBehindWarning(divergence: FormCodeBehindDivergence): string {
   const differences = divergence.firstDifferences.join(" | ");
@@ -1812,8 +1815,7 @@ export class VbaModulesAdapter {
         `Refused import: ${divergences.length} form(s) have a CodeBehindForm copy that differs from the .cls, and the .cls would overwrite that edit: ${listing}`,
         {
           details: { divergences },
-          remediation:
-            "Move the edit into the .cls (the single source of code), or re-run with acknowledgeCodeBehindWins:true to let the .cls win.",
+          remediation: CODE_BEHIND_DIVERGES_REMEDIATION,
         },
       ),
     );
@@ -1895,6 +1897,18 @@ export class VbaModulesAdapter {
     for (const divergence of divergences) {
       warnings.push(formatCodeBehindWarning(divergence));
     }
+    // Issue #2018 — say that apply:true would be refused, apart from the lint warnings.
+    const wouldRefuse =
+      divergences.length > 0 && params.acknowledgeCodeBehindWins !== true
+        ? [
+            {
+              code: "FORM_CODE_BEHIND_DIVERGES",
+              requiredFlags: ["acknowledgeCodeBehindWins"],
+              files: divergences.map((divergence) => divergence.file),
+              remediation: CODE_BEHIND_DIVERGES_REMEDIATION,
+            },
+          ]
+        : [];
     if (target.data.accessPath !== undefined) {
       await stat(target.data.accessPath).catch(() =>
         errors.push(`accessPath not found: ${target.data.accessPath}`),
@@ -1929,6 +1943,7 @@ export class VbaModulesAdapter {
         target: target.data,
         modulesPlanned,
         moduleClassifications,
+        wouldRefuse,
         warnings,
         errors,
       }),

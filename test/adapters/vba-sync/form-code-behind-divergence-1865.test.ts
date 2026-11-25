@@ -172,4 +172,48 @@ describe("import_modules — form code-behind divergence guard (#1865)", () => {
     expect(JSON.stringify(result)).toContain("edited only in the form");
     expect(actions).not.toContain("Import");
   });
+
+  // #2018 — the plan must say that apply:true will be refused, and which flag lifts it.
+  it("apply:false names the refusal apply:true would hit and the flag that lifts it", async () => {
+    await seed(DIVERGENT_CODE);
+    const adapter = buildAdapter(okExecutor({ count: 0 }), tmpRoot);
+
+    const result = await adapter.execute("import_modules", {
+      destinationRoot: tmpRoot,
+      moduleNames: ["Form_Sana"],
+      apply: false,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected a plan");
+    const plan = result.data as { wouldRefuse?: unknown; warnings: readonly string[] };
+    expect(plan.wouldRefuse).toEqual([
+      {
+        code: "FORM_CODE_BEHIND_DIVERGES",
+        requiredFlags: ["acknowledgeCodeBehindWins"],
+        files: [expect.stringContaining("Form_Sana.form.txt")],
+        remediation: expect.stringContaining("acknowledgeCodeBehindWins:true"),
+      },
+    ]);
+    // The existing warning stays for callers that read warnings only.
+    expect(plan.warnings.some((warning) => warning.startsWith("FORM_CODE_BEHIND_DIVERGES"))).toBe(
+      true,
+    );
+  });
+
+  it("apply:false with the acknowledgement plans no refusal", async () => {
+    await seed(DIVERGENT_CODE);
+    const adapter = buildAdapter(okExecutor({ count: 0 }), tmpRoot);
+
+    const result = await adapter.execute("import_modules", {
+      destinationRoot: tmpRoot,
+      moduleNames: ["Form_Sana"],
+      apply: false,
+      acknowledgeCodeBehindWins: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected a plan");
+    expect((result.data as { wouldRefuse?: unknown }).wouldRefuse).toEqual([]);
+  });
 });
